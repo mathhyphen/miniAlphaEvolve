@@ -53,18 +53,6 @@ htmlcov/
 Thumbs.db
 
 # Project specific
-outputs/*.json
-outputs/*.log
+outputs/
 !outputs/.gitkeep
 settings.json
-
-# Evolution outputs
-steiner_evolution_output/
-steiner_search/
-alphaevolve-redesign/
-mst_evolution.log
-steiner_tree_evolution.py
-
-# Windows temp
-C:UsersAdministratorAppDataLocalTempexp_output.txt
-nul
