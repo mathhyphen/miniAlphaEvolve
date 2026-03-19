@@ -1,8 +1,8 @@
 """AlphaEvolve Redesign - CLI Pipeline Entry Point.
 
 Usage:
-    python -m alphaevolve.run.pipeline --problem steiner_tree --iterations 1000
-    python -m alphaevolve.run.pipeline --problem mst --checkpoint checkpoint.pt
+    python -m run.pipeline --problem steiner_tree --iterations 1000
+    python -m run.pipeline --problem mst --checkpoint checkpoint.pt
 """
 
 import argparse
@@ -92,9 +92,12 @@ class EvolutionLoop:
         return p
 
     def _eval(self, code: str) -> ExecutionResult:
-        r = self.executor.execute(code, self.problem.baseline_function,
-                                  (self.problem.test_cases[0] if self.problem.test_cases else [],),
-                                  ExecutionConfig(timeout_seconds=30.0))
+        r = self.executor.execute(
+            code=code,
+            function=self.problem.baseline_function,
+            args=((self.problem.test_cases[0] if self.problem.test_cases else []),),
+            config=ExecutionConfig(timeout_seconds=30.0),
+        )
         fit = 1.0 / (1.0 + r.output) if r.success and r.output else 0.0
         return ExecutionResult(passed=r.success, fitness=fit, execution_time=r.execution_time, error=r.error or "")
 
