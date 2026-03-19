@@ -1,0 +1,60 @@
+# AlphaEvolve Experiment Configuration
+# Hydra-based configuration for reproducible experiments
+
+defaults:
+  - _self_
+
+# Experiment metadata
+experiment:
+  name: "sorting_evolution"
+  seed: 42
+  output_dir: "outputs/${experiment.name}"
+
+# Evolution hyperparameters
+evolution:
+  population_size: 10
+  max_generations: 5
+  elitism_count: 2
+  mutation_rate: 0.7
+  selection_pressure: 3
+
+# Mutation engine configuration
+mutation:
+  use_llm: false
+  llm_provider: "anthropic"
+  llm_model: "claude-3-5-sonnet-20241022"
+  temperature: 0.7
+  max_tokens: 4096
+
+# Evaluation configuration
+evaluation:
+  function_name: "sort_list"
+  partial_credit: true
+  timeout_per_test: 5.0
+  early_terminate: true
+
+# Archive configuration (MAP-Elites)
+archive:
+  enabled: true
+  bins_per_dimension: 10
+  feature_dimensions:
+    - name: "complexity"
+      n_bins: 10
+      max_complexity: 50
+    - name: "code_size"
+      n_bins: 10
+      max_size: 100
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  save_to_file: true
+  console_output: true
+
+# Checkpoint configuration
+checkpoint:
+  enabled: true
+  save_interval: 1  # Save every N generations
+  save_best_only: false
+  include_population: true

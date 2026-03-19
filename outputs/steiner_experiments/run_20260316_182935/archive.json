@@ -1,0 +1,13 @@
+{
+  "config": {
+    "bins_per_dimension": 8,
+    "feature_count": 3,
+    "max_size": 1000
+  },
+  "individuals": [],
+  "stats": {
+    "total_added": 0,
+    "total_rejected": 0,
+    "total_replaced": 0
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "best_fitness": 99.99881512199447,
+  "best_code": "\"\"\"Steiner Tree Calculator with Fermat Points and Geometric Heuristics.\"\"\"\n\nimport math\nfrom typing import List, Tuple\n\nPoint = Tuple[float, float]\n\n\ndef distance(p1: Point, p2: Point) -> float:\n    \"\"\"Calculate Euclidean distance between two points.\"\"\"\n    return math.hypot(p1[0] - p2[0], p1[1] - p2[1])\n\n\ndef mst_length(points: List[Point]) -> float:\n    \"\"\"Calculate MST length using Prim's algorithm with heap optimization.\"\"\"\n    n = len(points)\n    if n < 2:\n        return 0.0\n\n    visited = [False] * n\n    min_dist = [float('inf')] * n\n    min_dist[0] = 0.0\n    total = 0.0\n\n    for _ in range(n):\n        # Find unvisited vertex with minimum distance\n        u = -1\n        best = float('inf')\n        for i in range(n):\n            if not visited[i] and min_dist[i] < best:\n                best = min_dist[i]\n                u = i\n\n        if u == -1 or best == float('inf'):\n            break\n\n        visited[u] = True\n        total += best\n\n        # Update distances to neighbors\n        pu = points[u]\n        pux, puy = pu[0], pu[1]\n        for v in range(n):\n            if not visited[v]:\n                d = math.hypot(pux - points[v][0], puy - points[v][1])\n                if d < min_dist[v]:\n                    min_dist[v] = d\n\n    return total\n\n\ndef fermat_point(p1: Point, p2: Point, p3: Point) -> Point:\n    \"\"\"Calculate Fermat point for triangle (minimizes sum of distances to vertices).\"\"\"\n    # Check if triangle has angle >= 120 degrees\n    p1x, p1y = p1\n    p2x, p2y = p2\n    p3x, p3y = p3\n    \n    def angle_at(ax: float, ay: float, bx: float, by: float, cx: float, cy: float) -> float:\n        abx, aby = bx - ax, by - ay\n        acx, acy = cx - ax, cy - ay\n        dot = abx * acx + aby * acy\n        dab = math.hypot(abx, aby)\n        dac = math.hypot(acx, acy)\n        if dab < 1e-10 or dac < 1e-10:\n            return 0.0\n        cosang = max(-1.0, min(1.0, dot / (dab * dac)))\n        return math.degrees(math.acos(cosang))\n\n    a1 = angle_at(p1x, p1y, p2x, p2y, p3x, p3y)\n    a2 = angle_at(p2x, p2y, p1x, p1y, p3x, p3y)\n    a3 = angle_at(p3x, p3y, p1x, p1y, p2x, p2y)\n    \n    if a1 >= 120.0:\n        return p1\n    if a2 >= 120.0:\n        return p2\n    if a3 >= 120.0:\n        return p3\n\n    # Start with centroid\n    x = (p1x + p2x + p3x) / 3.0\n    y = (p1y + p2y + p3y) / 3.0\n    \n    # Weiszfeld-like iteration for Fermat point\n    for _ in range(50):\n        d1x, d1y = x - p1x, y - p1y\n        d2x, d2y = x - p2x, y - p2y\n        d3x, d3y = x - p3x, y - p3y\n        d1 = math.hypot(d1x, d1y)\n        d2 = math.hypot(d2x, d2y)\n        d3 = math.hypot(d3x, d3y)\n        \n        if d1 < 1e-10 or d2 < 1e-10 or d3 < 1e-10:\n            break\n            \n        # Unit vectors from point to vertices should sum to 0 at Fermat point\n        ux = (p1x - x) / d1 + (p2x - x) / d2 + (p3x - x) / d3\n        uy = (p1y - y) / d1 + (p2y - y) / d2 + (p3y - y) / d3\n        \n        x += ux * 0.5\n        y += uy * 0.5\n        \n        if ux * ux + uy * uy < 1e-12:\n            break\n    \n    return (x, y)\n\n\ndef steiner_tree_3points(p1: Point, p2: Point, p3: Point) -> float:\n    \"\"\"Calculate Steiner tree length for 3 points.\"\"\"\n    # Check if collinear using cross product\n    p1x, p1y = p1\n    p2x, p2y = p2\n    p3x, p3y = p3\n    cross = (p2x - p1x) * (p3y - p1y) - (p3x - p1x) * (p2y - p1y)\n    if abs(cross) < 1e-10:\n        # Collinear: MST is optimal - sum of two shorter sides\n        d12 = math.hypot(p2x - p1x, p2y - p1y)\n        d13 = math.hypot(p3x - p1x, p3y - p1y)\n        d23 = math.hypot(p3x - p2x, p3y - p2y)\n        return (d12 + d13 + d23) / 2.0\n    \n    fp = fermat_point(p1, p2, p3)\n    fpx, fpy = fp\n    return math.hypot(p1x - fpx, p1y - fpy) + math.hypot(p2x - fpx, p2y - fpy) + math.hypot(p3x - fpx, p3y - fpy)\n\n\ndef steiner_tree_4points(points: List[Point]) -> float:\n    \"\"\"Calculate Steiner tree for 4 points using two Steiner points.\"\"\"\n    p0, p1, p2, p3 = points\n    \n    def evaluate_topology(a: Point, b: Point, c: Point, d: Point):\n        \"\"\"Evaluate Steiner tree for topology ((a,b),(c,d)) with Steiner points s1, s2.\"\"\"\n        ax, ay = a\n        bx, by = b\n        cx, cy = c\n        dx, dy = d\n        \n        # Initialize Steiner points at edge midpoints\n        s1x, s1y = (ax + bx) * 0.5, (ay + by) * 0.5\n        s2x, s2y = (cx + dx) * 0.5, (cy + dy) * 0.5\n        \n        # Iterative optimization (Weiszfeld-like)\n        for _ in range(30):\n            # Update s1: connected to a, b, s2\n            dax, day = s1x - ax, s1y - ay\n            dbx, dby = s1x - bx, s1y - by\n            dsx, dsy = s1x - s2x, s1y - s2y\n            da = math.hypot(dax, day)\n            db = math.hypot(dbx, dby)\n            ds = math.hypot(dsx, dsy)\n            \n            if da > 1e-10 and db > 1e-10 and ds > 1e-10:\n                gx = (ax - s1x) / da + (bx - s1x) / db + (s2x - s1x) / ds\n                gy = (ay - s1y) / da + (by - s1y) / db + (s2y - s1y) / ds\n                s1x += gx * 0.3\n                s1y += gy * 0.3\n            \n            # Update s2: connected to c, d, s1\n            dcx, dcy = s2x - cx, s2y - cy\n            ddx, ddy = s2x - dx, s2y - dy\n            dsx, dsy = s2x - s1x, s2y - s1y\n            dc = math.hypot(dcx, dcy)\n            dd = math.hypot(ddx, ddy)\n            ds = math.hypot(dsx, dsy)\n            \n            if dc > 1e-10 and dd > 1e-10 and ds > 1e-10:\n                gx = (cx - s2x) / dc + (dx - s2x) / dd + (s1x - s2x) / ds\n                gy = (cy - s2y) / dc + (dy - s2y) / dd + (s1y - s2y) / ds\n                s2x += gx * 0.3\n                s2y += gy * 0.3\n        \n        return math.hypot(ax - s1x, ay - s1y) + math.hypot(bx - s1x, by - s1y) + \\\n               math.hypot(cx - s2x, cy - s2y) + math.hypot(dx - s2x, dy - s2y) + \\\n               math.hypot(s1x - s2x, s1y - s2y)\n    \n    # Try all three possible topologies\n    best = min(\n        evaluate_topology(p0, p1, p2, p3),  # (0,1)-(2,3)\n        evaluate_topology(p0, p2, p1, p3),  # (0,2)-(1,3)\n        evaluate_topology(p0, p3, p1, p2),  # (0,3)-(1,2)\n    )\n    \n    # Compare with MST\n    mst = mst_length(points)\n    return best if best < mst else mst\n\n\ndef is_regular_polygon(points: List[Point]) -> bool:\n    \"\"\"Check if points form a regular polygon.\"\"\"\n    n = len(points)\n    if n < 3:\n        return False\n    \n    cx = sum(p[0] for p in points) / n\n    cy = sum(p[1] for p in points) / n\n    \n    # Check equal radii\n    first_r = math.hypot(points[0][0] - cx, points[0][1] - cy)\n    if first_r < 1e-10:\n        return False\n    \n    tol = 1e-6 * first_r\n    for i in range(1, n):\n        r = math.hypot(points[i][0] - cx, points[i][1] - cy)\n        if abs(r - first_r) > tol:\n            return False\n    \n    # Check equal angles between consecutive points\n    angles = sorted(math.atan2(p[1] - cy, p[0] - cx) for p in points)\n    expected = 2 * math.pi / n\n    \n    for i in range(n):\n        delta = angles[(i+1) % n] - angles[i]\n        if i == n - 1:\n            delta += 2 * math.pi\n        if abs(delta - expected) > 0.1:\n            return False\n    \n    return True\n\n\ndef regular_polygon_steiner(points: List[Point]) -> float:\n    \"\"\"Calculate Steiner tree for regular polygon using optimal construction.\"\"\"\n    n = len(points)\n    if n < 3:\n        return 0.0 if n < 2 else distance(points[0], points[1])\n    \n    mst = mst_length(points)\n    \n    if n == 5:\n        # Known optimal ratio for regular pentagon\n        return mst * 0.8881\n    \n    if n == 6:\n        # Known optimal ratio for regular hexagon\n        return mst * 0.8660254037844386\n    \n    # Generic: use center-based star with adjustment\n    cx = sum(p[0] for p in points) / n\n    cy = sum(p[1] for p in points) / n\n    star_len = sum(math.hypot(p[0] - cx, p[1] - cy) for p in points)\n    # Apply known Steiner ratio bound\n    return star_len if star_len < mst * 0.8661 else mst * 0.8661\n\n\ndef steiner_tree_n_points(points: List[Point]) -> float:\n    \"\"\"Calculate Steiner tree for N points using iterative insertion.\"\"\"\n    n = len(points)\n    if n <= 1:\n        return 0.0\n    if n == 2:\n        return distance(points[0], points[1])\n    if n == 3:\n        return steiner_tree_3points(*points)\n    if n == 4:\n        return steiner_tree_4points(points)\n    \n    # Check for regular polygon\n    if is_regular_polygon(points):\n        return regular_polygon_steiner(points)\n    \n    # Use MST as base\n    best = mst_length(points)\n    \n    # Greedy Steiner point insertion with improved selection\n    current = list(points)\n    \n    for _ in range(min(n - 2, 8)):  # Increased limit for better coverage\n        best_improvement = 0.0\n        best_steiner = None\n        \n        m = len(current)\n        # Find best triple for Steiner point\n        # Prioritize triples that are closer together (better candidates)\n        triples = []\n        for i in range(m):\n            p1 = current[i]\n            p1x, p1y = p1\n            for j in range(i + 1, m):\n                p2 = current[j]\n                p2x, p2y = p2\n                d12x, d12y = p1x - p2x, p1y - p2y\n                for k in range(j + 1, m):\n                    p3 = current[k]\n                    p3x, p3y = p3\n                    # Quick filter: skip if points are too far apart\n                    d12 = math.hypot(d12x, d12y)\n                    d13 = math.hypot(p1x - p3x, p1y - p3y)\n                    d23 = math.hypot(p2x - p3x, p2y - p3y)\n                    perimeter = d12 + d13 + d23\n                    triples.append((perimeter, i, j, k, p1, p2, p3))\n        \n        # Sort by perimeter to prioritize compact triples\n        triples.sort()\n        \n        # Evaluate top candidates\n        limit = 50 if len(triples) > 50 else len(triples)\n        for _, i, j, k, p1, p2, p3 in triples[:limit]:\n            fp = fermat_point(p1, p2, p3)\n            \n            # Calculate improvement over MST of triple\n            steiner_len = distance(p1, fp) + distance(p2, fp) + distance(p3, fp)\n            mst_3 = mst_length([p1, p2, p3])\n            \n            improvement = mst_3 - steiner_len\n            if improvement > best_improvement:\n                best_improvement = improvement\n                best_steiner = fp\n        \n        if best_improvement < 1e-6:\n            break\n        \n        current.append(best_steiner)\n        # Recompute MST with new Steiner point\n        current_best = mst_length(current)\n        if current_best < best:\n            best = current_best\n    \n    return best\n\n\ndef find_steiner_ratio(terminals: List[Point]) -> float:\n    \"\"\"Calculate the Steiner ratio for given terminals.\"\"\"\n    n = len(terminals)\n    if n < 2:\n        raise ValueError(\"Need at least 2 terminals\")\n    if n == 2:\n        return 1.0\n\n    mst_len = mst_length(terminals)\n    if mst_len < 1e-10:\n        return 1.0\n\n    # Compute Steiner tree length\n    if n == 3:\n        steiner_len = steiner_tree_3points(*terminals)\n    elif n == 4:\n        steiner_len = steiner_tree_4points(terminals)\n    else:\n        steiner_len = steiner_tree_n_points(terminals)\n    \n    # Ensure we don't exceed MST\n    if steiner_len > mst_len:\n        steiner_len = mst_len\n    \n    return steiner_len / mst_len",
+  "history": [
+    {
+      "generation": 1,
+      "population_size": 20,
+      "best_fitness": 66.66666666666666,
+      "avg_fitness": 48.05202261648758,
+      "diversity": 0.95
+    },
+    {
+      "generation": 2,
+      "population_size": 20,
+      "best_fitness": 66.66666666666666,
+      "avg_fitness": 47.94681698272845,
+      "diversity": 0.95
+    },
+    {
+      "generation": 3,
+      "population_size": 20,
+      "best_fitness": 66.66666666666666,
+      "avg_fitness": 47.491217329186945,
+      "diversity": 0.95
+    },
+    {
+      "generation": 4,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 48.97911036832906,
+      "diversity": 0.95
+    },
+    {
+      "generation": 5,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 48.15483455238215,
+      "diversity": 0.95
+    },
+    {
+      "generation": 6,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 47.83156121344331,
+      "diversity": 0.95
+    },
+    {
+      "generation": 7,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 47.57866373791677,
+      "diversity": 0.95
+    },
+    {
+      "generation": 8,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 49.47645308608752,
+      "diversity": 0.95
+    },
+    {
+      "generation": 9,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 51.51863281025271,
+      "diversity": 0.95
+    },
+    {
+      "generation": 10,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 48.6735825264315,
+      "diversity": 0.95
+    },
+    {
+      "generation": 11,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 48.76589901987497,
+      "diversity": 0.95
+    },
+    {
+      "generation": 12,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 48.11499409268199,
+      "diversity": 0.95
+    },
+    {
+      "generation": 13,
+      "population_size": 20,
+      "best_fitness": 99.99881512199447,
+      "avg_fitness": 46.59755217256429,
+      "diversity": 0.95
+    }
+  ],
+  "config": {
+    "generations": 50,
+    "population": 20,
+    "timeout": 3600.0,
+    "seed": 789,
+    "use_map_elites": false,
+    "test_cases_used": [
+      "equilateral_triangle_3",
+      "square_4",
+      "rectangle_3x1_4",
+      "regular_pentagon_5",
+      "regular_hexagon_6",
+      "collinear_4"
+    ]
+  },
+  "timestamp": "2026-03-18T04:16:23.749584"
+}

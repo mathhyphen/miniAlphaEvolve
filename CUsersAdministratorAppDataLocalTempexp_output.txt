@@ -1,0 +1,161 @@
+21:27:41 - steiner_experiment - INFO - ============================================================
+21:27:41 - steiner_experiment - INFO - Steiner Tree Evolution Experiment
+21:27:41 - steiner_experiment - INFO - ============================================================
+21:27:41 - steiner_experiment - INFO - Loaded seed code from D:\apps\AlphaEvolve\steiner_search\seeds\fermat_baseline.py
+21:27:41 - steiner_experiment - INFO - Seed code length: 33895 characters
+21:27:41 - steiner_experiment - INFO - Test cases: 6
+21:27:41 - steiner_experiment - INFO -   - equilateral_triangle_3: 3 points, optimal=0.8660
+21:27:41 - steiner_experiment - INFO -   - square_4: 4 points, optimal=0.9107
+21:27:41 - steiner_experiment - INFO -   - rectangle_3x1_4: 4 points, optimal=0.9428
+21:27:41 - steiner_experiment - INFO -   - regular_pentagon_5: 5 points, optimal=0.8881
+21:27:41 - steiner_experiment - INFO -   - regular_hexagon_6: 6 points, optimal=0.8660
+21:27:41 - steiner_experiment - INFO -   - collinear_4: 4 points, optimal=1.0000
+21:27:41 - steiner_experiment - INFO - Created evaluator: CompositeSteinerEvaluator
+21:27:41 - steiner_experiment - INFO - Created mutation engine with Anthropic LLM (claude-3-5-sonnet-20241022)
+21:27:41 - steiner_experiment - INFO - Starting evolution...
+21:27:41 - steiner_experiment - INFO -   Population size: 10
+21:27:41 - steiner_experiment - INFO -   Max generations: 5
+21:27:41 - steiner_experiment - INFO -   Elitism count: 2
+21:27:41 - steiner_experiment - INFO -   Timeout: 300.0s
+21:27:41 - steiner_experiment - INFO -   Random seed: 42
+21:27:41 - steiner_experiment - INFO - 
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+Unexpected error: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config.
+Model anthropic failed: Failed after 3 attempts: ANTHROPIC_API_KEY not set. Set it in environment or pass api_key in config., attempting fallback
+LLM ensemble failed: No fallback models available, using fallback
+Lines nearly parallel, using centroid
+Lines nearly parallel, using centroid
+21:27:42 - steiner_experiment - INFO - 
+21:27:42 - steiner_experiment - INFO - ============================================================
+21:27:42 - steiner_experiment - INFO - Evolution Complete!
+21:27:42 - steiner_experiment - INFO - ============================================================
+21:27:42 - steiner_experiment - INFO - Best fitness: 86.5108
+21:27:42 - steiner_experiment - INFO - Elapsed time: 0.87s
+21:27:42 - steiner_experiment - INFO - Total generations: 5
+21:27:42 - steiner_experiment - INFO - 
+21:27:42 - steiner_experiment - INFO - Evolution History:
+21:27:42 - steiner_experiment - INFO - ----------------------------------------
+21:27:42 - steiner_experiment - INFO -   Gen   1: Best=  86.51, Avg=  86.51, Pop= 10, Div=0.300
+21:27:42 - steiner_experiment - INFO -   Gen   2: Best=  86.51, Avg=  86.51, Pop= 10, Div=0.300
+21:27:42 - steiner_experiment - INFO -   Gen   3: Best=  86.51, Avg=  86.51, Pop= 10, Div=0.300
+21:27:42 - steiner_experiment - INFO -   Gen   4: Best=  86.51, Avg=  86.51, Pop= 10, Div=0.300
+21:27:42 - steiner_experiment - INFO -   Gen   5: Best=  86.51, Avg=  86.51, Pop= 10, Div=0.300
+21:27:42 - steiner_experiment - INFO - 
+21:27:42 - steiner_experiment - INFO - Results saved to: D:\apps\AlphaEvolve\outputs\steiner_experiments\run_20260316_212741
+
+============================================================
+Experiment completed successfully!
+Best fitness: 86.5108
+Generations run: 5
+Elapsed time: 0.87s
+Results saved to: outputs\steiner_experiments\run_20260316_212741
