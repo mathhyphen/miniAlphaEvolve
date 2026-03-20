@@ -18,6 +18,7 @@ Run the experiment with:
 ```bash
 python -m run.steiner_ratio_search
 python -m run.steiner_ratio_search --terminals 4 --runs 3 --min-separation 0.1
+python -m run.steiner_ratio_sweep
 ```
 
 Artifacts are written to `outputs/steiner_ratio_search_<timestamp>/`:
@@ -28,6 +29,14 @@ Artifacts are written to `outputs/steiner_ratio_search_<timestamp>/`:
 - `best_candidates.json`
 - `counterexample_candidates.json`
 - `report.md`
+
+Sweep artifacts are written to `outputs/steiner_ratio_sweep_<timestamp>/`:
+
+- `summary.json`
+- `sweep_summary.json`
+- `report.md`
+- `runs/results.json`
+- `runs/report.md`
 
 The current evaluator contract is conservative:
 
@@ -40,3 +49,5 @@ That means:
 - if the reported `4`-terminal upper bound ever drops below `sqrt(3)/2`, that point set is already a certified counterexample, because the true SMT can only be shorter.
 
 For extremal-structure discovery, `--min-separation` is important. Without it, the search tends to collapse two terminals together and imitate the `3`-terminal extremizer instead of revealing a genuinely new `4`-terminal family.
+
+The dedicated sweep runner is useful when the question is structural rather than adversarial: it lets you see how the best ratio changes as terminal collisions are ruled out.

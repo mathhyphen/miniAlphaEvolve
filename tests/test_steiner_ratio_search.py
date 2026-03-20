@@ -9,7 +9,11 @@ from alphaevolve.research import (
     evaluate_four_terminal_upper_bound,
     evaluate_three_terminal_ratio,
     evolutionary_search,
+    run_min_separation_sweep,
+    summarize_separation_sweep,
+    write_min_separation_sweep_report,
 )
+from run.steiner_ratio_search import _summary_payload, _write_sweep_report
 
 
 def test_three_terminal_equilateral_hits_conjectured_ratio() -> None:
@@ -144,3 +148,122 @@ def test_search_respects_minimum_terminal_separation() -> None:
     )
 
     assert outcome.best.metadata["minimum_pairwise_distance"] >= 0.08 - 1e-9
+
+
+def test_summarize_separation_sweep_groups_by_threshold() -> None:
+    outcomes = [
+        evolutionary_search(
+            SearchConfig(
+                num_terminals=4,
+                population_size=16,
+                generations=4,
+                elite_count=4,
+                local_trials=2,
+                min_terminal_separation=0.0,
+                seed=0,
+            ),
+            label="free",
+        ),
+        evolutionary_search(
+            SearchConfig(
+                num_terminals=4,
+                population_size=16,
+                generations=4,
+                elite_count=4,
+                local_trials=2,
+                min_terminal_separation=0.1,
+                seed=1,
+            ),
+            label="constrained",
+        ),
+    ]
+
+    summary = summarize_separation_sweep(outcomes)
+
+    assert [row.min_terminal_separation for row in summary] == [0.0, 0.1]
+    assert summary[1].best_ratio >= summary[0].best_ratio
+    assert summary[1].mean_minimum_pairwise_distance >= 0.1 - 1e-9
+
+
+def test_cli_summary_and_sweep_report_include_grid_rows(tmp_path) -> None:
+    outcomes = [
+        evolutionary_search(
+            SearchConfig(
+                num_terminals=4,
+                population_size=14,
+                generations=4,
+                elite_count=4,
+                local_trials=2,
+                min_terminal_separation=0.0,
+                seed=2,
+            ),
+            label="sep0",
+        ),
+        evolutionary_search(
+            SearchConfig(
+                num_terminals=4,
+                population_size=14,
+                generations=4,
+                elite_count=4,
+                local_trials=2,
+                min_terminal_separation=0.05,
+                seed=3,
+            ),
+            label="sep005",
+        ),
+    ]
+
+    summary = _summary_payload(outcomes)
+    _write_sweep_report(summary, tmp_path)
+
+    rows = json.loads((tmp_path / "separation_sweep.json").read_text(encoding="utf-8"))
+    assert len(rows) == 2
+    assert rows[0]["min_terminal_separation"] == 0.0
+    assert rows[1]["min_terminal_separation"] == 0.05
+    assert "4-terminal, min separation 0.050000" in (tmp_path / "separation_sweep.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_run_min_separation_sweep_returns_one_row_per_bucket() -> None:
+    sweep = run_min_separation_sweep(
+        separations=[0.0, 0.05, 0.1],
+        runs_per_separation=2,
+        num_terminals=4,
+        population_size=16,
+        generations=4,
+        elite_count=4,
+        mutation_sigma=0.16,
+        mutation_decay=0.994,
+        crossover_rate=0.35,
+        random_injection_rate=0.15,
+        local_trials=2,
+        seed=3,
+    )
+
+    assert [row.min_terminal_separation for row in sweep.rows] == [0.0, 0.05, 0.1]
+    assert len(sweep.run_outcomes) == 6
+    assert sweep.rows[1].mean_minimum_pairwise_distance >= 0.05 - 1e-9
+
+
+def test_write_min_separation_sweep_report_emits_expected_files(tmp_path) -> None:
+    sweep = run_min_separation_sweep(
+        separations=[0.0, 0.05],
+        runs_per_separation=1,
+        num_terminals=4,
+        population_size=14,
+        generations=3,
+        elite_count=4,
+        mutation_sigma=0.16,
+        mutation_decay=0.994,
+        crossover_rate=0.35,
+        random_injection_rate=0.15,
+        local_trials=2,
+        seed=1,
+    )
+
+    write_min_separation_sweep_report(sweep, tmp_path)
+
+    assert (tmp_path / "sweep_summary.json").exists()
+    assert (tmp_path / "report.md").exists()
+    assert (tmp_path / "runs" / "results.json").exists()

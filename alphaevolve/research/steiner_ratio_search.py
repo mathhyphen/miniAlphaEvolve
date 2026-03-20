@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import random
+import statistics
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -53,6 +54,45 @@ class SearchOutcome:
     top_candidates: List[CandidateRecord]
     generation_history: List[float]
     median_history: List[float]
+
+
+@dataclass(frozen=True)
+class SeparationSweepRow:
+    """Aggregate statistics for one min-separation bucket."""
+
+    min_terminal_separation: float
+    best_ratio: float
+    median_best_ratio: float
+    mean_gap_to_conjecture: float
+    mean_minimum_pairwise_distance: float
+    boundary_hugging_fraction: float
+    hull3_fraction: float
+    best_label: str
+    best_topology: str
+
+
+@dataclass(frozen=True)
+class SeparationSweepOutcome:
+    """Summary of a full min-separation sweep."""
+
+    rows: List[SeparationSweepRow]
+    run_outcomes: List[SearchOutcome]
+
+
+@dataclass(frozen=True)
+class SeparationSweepSummary:
+    """Aggregate search outcomes by minimum terminal separation."""
+
+    num_terminals: int
+    min_terminal_separation: float
+    runs: int
+    best_ratio: float
+    mean_best_ratio: float
+    worst_best_ratio: float
+    best_gap: float
+    mean_gap: float
+    mean_minimum_pairwise_distance: float
+    best_candidate_hull_sizes: Tuple[int, ...]
 
 
 def _distance(left: Point, right: Point) -> float:
@@ -498,6 +538,42 @@ def outcome_to_jsonable(outcome: SearchOutcome) -> Dict[str, Any]:
     return asdict(outcome)
 
 
+def summarize_separation_sweep(outcomes: Sequence[SearchOutcome]) -> List[SeparationSweepSummary]:
+    """Aggregate outcomes by terminal count and minimum separation."""
+    grouped: Dict[Tuple[int, float], List[SearchOutcome]] = {}
+    for outcome in outcomes:
+        key = (outcome.config.num_terminals, outcome.config.min_terminal_separation)
+        grouped.setdefault(key, []).append(outcome)
+
+    summaries: List[SeparationSweepSummary] = []
+    for (num_terminals, min_terminal_separation), bucket in sorted(grouped.items()):
+        best_ratios = [outcome.best.ratio for outcome in bucket]
+        min_distances = [
+            float(outcome.best.metadata.get("minimum_pairwise_distance", 0.0))
+            for outcome in bucket
+        ]
+        hull_sizes = tuple(
+            int(outcome.best.metadata.get("hull_size", 0))
+            for outcome in sorted(bucket, key=lambda item: item.best.ratio)
+        )
+        summaries.append(
+            SeparationSweepSummary(
+                num_terminals=num_terminals,
+                min_terminal_separation=min_terminal_separation,
+                runs=len(bucket),
+                best_ratio=min(best_ratios),
+                mean_best_ratio=sum(best_ratios) / len(best_ratios),
+                worst_best_ratio=max(best_ratios),
+                best_gap=min(best_ratios) - STEINER_RATIO_CONJECTURE,
+                mean_gap=(sum(best_ratios) / len(best_ratios)) - STEINER_RATIO_CONJECTURE,
+                mean_minimum_pairwise_distance=sum(min_distances) / len(min_distances),
+                best_candidate_hull_sizes=hull_sizes,
+            )
+        )
+
+    return summaries
+
+
 def write_outcome_report(outcomes: Sequence[SearchOutcome], output_dir: Path) -> None:
     """Persist JSON and Markdown summaries for search outcomes."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -595,5 +671,132 @@ def write_outcome_report(outcomes: Sequence[SearchOutcome], output_dir: Path) ->
                 f"min-pair-distance `{candidate.metadata['minimum_pairwise_distance']:.6f}`"
             )
         lines.append("")
+
+    (output_dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def run_min_separation_sweep(
+    *,
+    separations: Sequence[float],
+    runs_per_separation: int,
+    num_terminals: int,
+    population_size: int,
+    generations: int,
+    elite_count: int,
+    mutation_sigma: float,
+    mutation_decay: float,
+    crossover_rate: float,
+    random_injection_rate: float,
+    local_trials: int,
+    seed: int = 0,
+) -> SeparationSweepOutcome:
+    """Run the same search budget across a grid of minimum-separation constraints."""
+    if num_terminals != 4:
+        raise ValueError("Min-separation sweep is currently intended for 4-terminal searches.")
+
+    rows: List[SeparationSweepRow] = []
+    run_outcomes: List[SearchOutcome] = []
+
+    for separation_index, separation in enumerate(separations):
+        bucket_outcomes: List[SearchOutcome] = []
+        for run_index in range(runs_per_separation):
+            run_seed = seed + separation_index * runs_per_separation + run_index
+            config = SearchConfig(
+                num_terminals=num_terminals,
+                population_size=population_size,
+                generations=generations,
+                elite_count=elite_count,
+                mutation_sigma=mutation_sigma,
+                mutation_decay=mutation_decay,
+                crossover_rate=crossover_rate,
+                random_injection_rate=random_injection_rate,
+                local_trials=local_trials,
+                min_terminal_separation=separation,
+                seed=run_seed,
+            )
+            label = f"four_terminal_sep_{separation:.3f}_seed_{run_seed}"
+            outcome = evolutionary_search(config, label=label)
+            bucket_outcomes.append(outcome)
+            run_outcomes.append(outcome)
+
+        best_outcome = min(bucket_outcomes, key=lambda outcome: outcome.best.ratio)
+        best_ratios = [outcome.best.ratio for outcome in bucket_outcomes]
+        gaps = [ratio - STEINER_RATIO_CONJECTURE for ratio in best_ratios]
+        min_pairwise = [
+            float(outcome.best.metadata["minimum_pairwise_distance"])
+            for outcome in bucket_outcomes
+        ]
+        hull3_fraction = sum(
+            1 for outcome in bucket_outcomes if int(outcome.best.metadata["hull_size"]) == 3
+        ) / len(bucket_outcomes)
+        boundary_hugging_fraction = sum(
+            1
+            for distance in min_pairwise
+            if distance <= separation + max(0.01, separation * 0.15)
+        ) / len(bucket_outcomes)
+
+        rows.append(
+            SeparationSweepRow(
+                min_terminal_separation=separation,
+                best_ratio=min(best_ratios),
+                median_best_ratio=statistics.median(best_ratios),
+                mean_gap_to_conjecture=statistics.fmean(gaps),
+                mean_minimum_pairwise_distance=statistics.fmean(min_pairwise),
+                boundary_hugging_fraction=boundary_hugging_fraction,
+                hull3_fraction=hull3_fraction,
+                best_label=best_outcome.label,
+                best_topology=best_outcome.best.topology,
+            )
+        )
+
+    return SeparationSweepOutcome(rows=rows, run_outcomes=run_outcomes)
+
+
+def write_min_separation_sweep_report(
+    sweep: SeparationSweepOutcome,
+    output_dir: Path,
+) -> None:
+    """Persist JSON and Markdown summaries for a min-separation sweep."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    write_outcome_report(sweep.run_outcomes, output_dir / "runs")
+    (output_dir / "sweep_summary.json").write_text(
+        json.dumps([asdict(row) for row in sweep.rows], indent=2),
+        encoding="utf-8",
+    )
+
+    lines = [
+        "# Steiner Ratio Min-Separation Sweep",
+        "",
+        f"- Conjectured lower bound: `{STEINER_RATIO_CONJECTURE:.12f}`",
+        "",
+        "| min separation | best ratio | median best ratio | mean gap | mean min pair | boundary-hugging frac | hull=3 frac | best topology |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+
+    for row in sweep.rows:
+        lines.append(
+            "| "
+            f"{row.min_terminal_separation:.3f} | "
+            f"{row.best_ratio:.12f} | "
+            f"{row.median_best_ratio:.12f} | "
+            f"{row.mean_gap_to_conjecture:.12f} | "
+            f"{row.mean_minimum_pairwise_distance:.6f} | "
+            f"{row.boundary_hugging_fraction:.3f} | "
+            f"{row.hull3_fraction:.3f} | "
+            f"{row.best_topology} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Interpretation Hints",
+            "",
+            "- High boundary-hugging fraction means the search is pushing terminals against the minimum-separation floor.",
+            "- High hull=3 fraction suggests many best candidates still place one terminal effectively inside a triangle-like hull.",
+            "- If best ratios rise as separation increases, the low-ratio regime is likely driven by terminal clustering rather than a stable 4-terminal extremizer.",
+            "",
+        ]
+    )
 
     (output_dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
