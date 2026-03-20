@@ -57,12 +57,18 @@ What is now closer:
 - there are dedicated runners for structured experiments and sweeps,
 - evaluation is automatic and machine-checkable,
 - reports and archives make iterative discovery reproducible.
+- there is now also a minimal code-centric LLM-evolution scaffold with:
+  - a score-ordered program database,
+  - archive-backed inspiration sampling,
+  - a prompt sampler,
+  - and a prompt-driven diff proposer.
 
 Relevant files:
 
 - [`alphaevolve/research/steiner_ratio_search.py`](/D:/apps/AlphaEvolve/alphaevolve/research/steiner_ratio_search.py)
 - [`run/steiner_ratio_search.py`](/D:/apps/AlphaEvolve/run/steiner_ratio_search.py)
 - [`run/steiner_ratio_sweep.py`](/D:/apps/AlphaEvolve/run/steiner_ratio_sweep.py)
+- [`alphaevolve/llm_evolution/__init__.py`](/D:/apps/AlphaEvolve/alphaevolve/llm_evolution/__init__.py)
 
 ## What is still missing for real AlphaEvolve parity
 
@@ -72,16 +78,16 @@ This repository still does **not** implement the most distinctive DeepMind Alpha
 
 The biggest remaining gaps are:
 
-1. No prompt sampler that constructs rich context from prior trials, inspirations, and feedback.
-2. No LLM-based diff generation loop over evolve-marked code blocks.
-3. No general program database that stores code candidates plus evaluation metadata as the central search memory.
-4. No controller loop whose main mutation operator is "ask model for an improved diff, then execute it."
+1. No real LLM ensemble yet; the repository now has only a model-agnostic interface.
+2. No evolve-block API for marking mutable regions inside a larger codebase.
+3. No rich evaluator feedback rendering back into prompts beyond the minimal scaffold.
+4. No distributed controller / evaluator pool.
 
 ## Recommended next step
 
 If the goal is to move materially closer to DeepMind AlphaEvolve, the next architectural milestone should be:
 
-- add a lightweight LLM-diff evolutionary loop that sits beside the current RL code, not inside it.
+- connect the new lightweight LLM-diff scaffold to a real model backend and evolve-marked program blocks.
 
 That loop should look like:
 

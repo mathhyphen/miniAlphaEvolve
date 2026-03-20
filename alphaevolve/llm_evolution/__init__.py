@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, Sequence
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,25 @@ class DiffProposer(Protocol):
 
     def propose(self, parent: ProgramCandidate, archive: "ProgramDatabase") -> str:
         """Return a lightweight diff instruction or a full child program."""
+
+
+class PromptSampler(Protocol):
+    """Build a prompt from a parent and archive inspirations."""
+
+    def build_prompt(
+        self,
+        parent: ProgramCandidate,
+        inspirations: Sequence[ProgramCandidate],
+        archive: "ProgramDatabase",
+    ) -> str:
+        """Return a prompt for an LLM-style proposer."""
+
+
+class TextGenerator(Protocol):
+    """Minimal interface for an LLM-like text generator."""
+
+    def generate(self, prompt: str) -> str:
+        """Generate a proposal string from a prompt."""
 
 
 class Evaluator(Protocol):
@@ -78,6 +97,20 @@ class ProgramDatabase:
             return list(self._candidates)
         return list(self._candidates[:limit])
 
+    def inspirations_for(
+        self,
+        parent: ProgramCandidate,
+        *,
+        limit: int = 2,
+    ) -> list[ProgramCandidate]:
+        """Return archive entries that can inspire improvements to the parent."""
+        inspirations = [
+            candidate
+            for candidate in self._candidates
+            if candidate.program != parent.program
+        ]
+        return inspirations[:limit]
+
     def __len__(self) -> int:
         return len(self._candidates)
 
@@ -109,6 +142,64 @@ class EvolutionResult:
     @property
     def best(self) -> ProgramCandidate:
         return self.archive.best()
+
+
+@dataclass(frozen=True)
+class SimplePromptSampler:
+    """Render a compact archive-backed prompt for proposal models."""
+
+    include_scores: bool = True
+    inspiration_limit: int = 2
+
+    def build_prompt(
+        self,
+        parent: ProgramCandidate,
+        inspirations: Sequence[ProgramCandidate],
+        archive: ProgramDatabase,
+    ) -> str:
+        lines = [
+            "You are improving a program candidate.",
+            "",
+            "Parent candidate:",
+            self._render_candidate(parent),
+        ]
+        if inspirations:
+            lines.extend(["", "Archive inspirations:"])
+            for inspiration in inspirations[: self.inspiration_limit]:
+                lines.append(self._render_candidate(inspiration))
+        lines.extend(
+            [
+                "",
+                f"Archive size: {len(archive)}",
+                "Return a lightweight diff instruction using one of:",
+                "- append:<text>",
+                "- replace:<old>=><new>",
+                "- set:<full program>",
+            ]
+        )
+        return "\n".join(lines)
+
+    def _render_candidate(self, candidate: ProgramCandidate) -> str:
+        if self.include_scores:
+            return (
+                f"[id={candidate.candidate_id or 'unknown'} score={candidate.score:.6f}]\n"
+                f"{candidate.program}"
+            )
+        return candidate.program
+
+
+@dataclass(frozen=True)
+class PromptDrivenDiffProposer:
+    """Build prompts from the archive and delegate proposal generation to a model."""
+
+    sampler: PromptSampler
+    model: TextGenerator
+    inspiration_limit: int = 2
+
+    def propose(self, parent: ProgramCandidate, archive: ProgramDatabase) -> str:
+        inspirations = archive.inspirations_for(parent, limit=self.inspiration_limit)
+        prompt = self.sampler.build_prompt(parent, inspirations, archive)
+        return self.model.generate(prompt)
 
 
 def run_evolution_loop(
@@ -160,7 +251,11 @@ __all__ = [
     "Evaluator",
     "EvolutionResult",
     "EvolutionStep",
+    "PromptDrivenDiffProposer",
+    "PromptSampler",
     "ProgramCandidate",
     "ProgramDatabase",
+    "SimplePromptSampler",
+    "TextGenerator",
     "run_evolution_loop",
 ]
