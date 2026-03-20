@@ -84,6 +84,25 @@ def test_constrained_search_respects_minimum_separation() -> None:
     assert outcome.best.ratio > STEINER_RATIO_CONJECTURE
 
 
+def test_search_can_require_full_hull() -> None:
+    outcome = evolutionary_search(
+        SearchConfig(
+            num_terminals=4,
+            population_size=20,
+            generations=6,
+            elite_count=4,
+            local_trials=2,
+            min_terminal_separation=0.05,
+            require_full_hull=True,
+            seed=13,
+        ),
+        label="full_hull",
+    )
+
+    assert outcome.best.metadata["hull_size"] == 4
+    assert outcome.best.metadata["minimum_pairwise_distance"] >= 0.05 - 1e-9
+
+
 def test_evolutionary_search_is_deterministic_for_same_seed() -> None:
     config = SearchConfig(
         num_terminals=4,
@@ -220,6 +239,7 @@ def test_cli_summary_and_sweep_report_include_grid_rows(tmp_path) -> None:
     assert len(rows) == 2
     assert rows[0]["min_terminal_separation"] == 0.0
     assert rows[1]["min_terminal_separation"] == 0.05
+    assert rows[0]["require_full_hull"] is False
     assert "4-terminal, min separation 0.050000" in (tmp_path / "separation_sweep.md").read_text(
         encoding="utf-8"
     )
@@ -244,6 +264,28 @@ def test_run_min_separation_sweep_returns_one_row_per_bucket() -> None:
     assert [row.min_terminal_separation for row in sweep.rows] == [0.0, 0.05, 0.1]
     assert len(sweep.run_outcomes) == 6
     assert sweep.rows[1].mean_minimum_pairwise_distance >= 0.05 - 1e-9
+
+
+def test_run_min_separation_sweep_can_require_full_hull() -> None:
+    sweep = run_min_separation_sweep(
+        separations=[0.05],
+        runs_per_separation=2,
+        num_terminals=4,
+        population_size=16,
+        generations=4,
+        elite_count=4,
+        mutation_sigma=0.16,
+        mutation_decay=0.994,
+        crossover_rate=0.35,
+        random_injection_rate=0.15,
+        local_trials=2,
+        require_full_hull=True,
+        seed=3,
+    )
+
+    assert len(sweep.rows) == 1
+    assert sweep.rows[0].full_hull_fraction == 1.0
+    assert sweep.rows[0].hull3_fraction == 0.0
 
 
 def test_write_min_separation_sweep_report_emits_expected_files(tmp_path) -> None:

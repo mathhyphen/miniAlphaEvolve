@@ -41,6 +41,7 @@ class SearchConfig:
     random_injection_rate: float = 0.15
     local_trials: int = 3
     min_terminal_separation: float = 0.0
+    require_full_hull: bool = False
     seed: int = 0
 
 
@@ -67,6 +68,7 @@ class SeparationSweepRow:
     mean_minimum_pairwise_distance: float
     boundary_hugging_fraction: float
     hull3_fraction: float
+    full_hull_fraction: float
     best_label: str
     best_topology: str
 
@@ -345,19 +347,42 @@ def _meets_minimum_separation(points: Sequence[Point], min_terminal_separation: 
     return _minimum_pairwise_distance(points) + 1e-12 >= min_terminal_separation
 
 
+def _meets_hull_requirement(points: Sequence[Point], require_full_hull: bool) -> bool:
+    if not require_full_hull:
+        return True
+    return _convex_hull_size(points) == len(points)
+
+
+def _is_valid_point_set(
+    points: Sequence[Point],
+    *,
+    min_terminal_separation: float,
+    require_full_hull: bool,
+) -> bool:
+    return _meets_minimum_separation(points, min_terminal_separation) and _meets_hull_requirement(
+        points,
+        require_full_hull,
+    )
+
+
 def _random_point_set(
     num_terminals: int,
     rng: random.Random,
     min_terminal_separation: float = 0.0,
+    require_full_hull: bool = False,
     max_attempts: int = 128,
 ) -> Tuple[Point, ...]:
     for _ in range(max_attempts):
         candidate = _normalize_points(
             tuple((rng.uniform(-1.0, 1.0), rng.uniform(-1.0, 1.0)) for _ in range(num_terminals))
         )
-        if _meets_minimum_separation(candidate, min_terminal_separation):
+        if _is_valid_point_set(
+            candidate,
+            min_terminal_separation=min_terminal_separation,
+            require_full_hull=require_full_hull,
+        ):
             return candidate
-    raise RuntimeError("Failed to sample a point set satisfying the minimum separation constraint.")
+    raise RuntimeError("Failed to sample a point set satisfying the geometric search constraints.")
 
 
 def _structured_seed_population(num_terminals: int) -> Iterable[Tuple[Point, ...]]:
@@ -380,6 +405,7 @@ def _mutate(
     rng: random.Random,
     sigma: float,
     min_terminal_separation: float = 0.0,
+    require_full_hull: bool = False,
     max_attempts: int = 24,
 ) -> Tuple[Point, ...]:
     for _ in range(max_attempts):
@@ -388,7 +414,11 @@ def _mutate(
             for point in points
         ]
         candidate = _normalize_points(mutated)
-        if _meets_minimum_separation(candidate, min_terminal_separation):
+        if _is_valid_point_set(
+            candidate,
+            min_terminal_separation=min_terminal_separation,
+            require_full_hull=require_full_hull,
+        ):
             return candidate
     return _normalize_points(points)
 
@@ -399,6 +429,7 @@ def _crossover(
     rng: random.Random,
     sigma: float,
     min_terminal_separation: float = 0.0,
+    require_full_hull: bool = False,
     max_attempts: int = 24,
 ) -> Tuple[Point, ...]:
     for _ in range(max_attempts):
@@ -412,7 +443,11 @@ def _crossover(
                 )
             )
         candidate = _normalize_points(blended)
-        if _meets_minimum_separation(candidate, min_terminal_separation):
+        if _is_valid_point_set(
+            candidate,
+            min_terminal_separation=min_terminal_separation,
+            require_full_hull=require_full_hull,
+        ):
             return candidate
     return _normalize_points(left)
 
@@ -445,7 +480,11 @@ def evolutionary_search(config: SearchConfig, label: str) -> SearchOutcome:
     population: List[Tuple[Point, ...]] = [
         candidate
         for candidate in _structured_seed_population(config.num_terminals)
-        if _meets_minimum_separation(candidate, config.min_terminal_separation)
+        if _is_valid_point_set(
+            candidate,
+            min_terminal_separation=config.min_terminal_separation,
+            require_full_hull=config.require_full_hull,
+        )
     ]
     while len(population) < config.population_size:
         population.append(
@@ -453,6 +492,7 @@ def evolutionary_search(config: SearchConfig, label: str) -> SearchOutcome:
                 config.num_terminals,
                 rng,
                 min_terminal_separation=config.min_terminal_separation,
+                require_full_hull=config.require_full_hull,
             )
         )
 
@@ -484,6 +524,7 @@ def evolutionary_search(config: SearchConfig, label: str) -> SearchOutcome:
                         config.num_terminals,
                         rng,
                         min_terminal_separation=config.min_terminal_separation,
+                        require_full_hull=config.require_full_hull,
                     )
                 )
             elif roll < config.random_injection_rate + config.crossover_rate and len(elite_points) >= 2:
@@ -495,6 +536,7 @@ def evolutionary_search(config: SearchConfig, label: str) -> SearchOutcome:
                         rng,
                         sigma,
                         min_terminal_separation=config.min_terminal_separation,
+                        require_full_hull=config.require_full_hull,
                     )
                 )
             else:
@@ -504,6 +546,7 @@ def evolutionary_search(config: SearchConfig, label: str) -> SearchOutcome:
                     rng,
                     sigma,
                     min_terminal_separation=config.min_terminal_separation,
+                    require_full_hull=config.require_full_hull,
                 )
                 child_ratio = evaluator(child).ratio
                 for _ in range(config.local_trials - 1):
@@ -512,6 +555,7 @@ def evolutionary_search(config: SearchConfig, label: str) -> SearchOutcome:
                         rng,
                         sigma * 0.6,
                         min_terminal_separation=config.min_terminal_separation,
+                        require_full_hull=config.require_full_hull,
                     )
                     candidate_ratio = evaluator(candidate).ratio
                     if candidate_ratio < child_ratio:
@@ -590,6 +634,7 @@ def write_outcome_report(outcomes: Sequence[SearchOutcome], output_dir: Path) ->
             "random_injection_rate": outcome.config.random_injection_rate,
             "local_trials": outcome.config.local_trials,
             "min_terminal_separation": outcome.config.min_terminal_separation,
+            "require_full_hull": outcome.config.require_full_hull,
             "seed": outcome.config.seed,
         }
         for outcome in outcomes
@@ -655,6 +700,7 @@ def write_outcome_report(outcomes: Sequence[SearchOutcome], output_dir: Path) ->
                 f"- Topology: `{outcome.best.topology}`",
                 f"- Points: `{list(outcome.best.points)}`",
                 f"- Minimum terminal separation: `{outcome.config.min_terminal_separation:.6f}`",
+                f"- Require full hull: `{outcome.config.require_full_hull}`",
                 f"- Final median ratio: `{outcome.median_history[-1]:.12f}`",
                 f"- Candidate count stored: `{len(outcome.top_candidates)}`",
                 "",
@@ -688,6 +734,7 @@ def run_min_separation_sweep(
     crossover_rate: float,
     random_injection_rate: float,
     local_trials: int,
+    require_full_hull: bool = False,
     seed: int = 0,
 ) -> SeparationSweepOutcome:
     """Run the same search budget across a grid of minimum-separation constraints."""
@@ -712,6 +759,7 @@ def run_min_separation_sweep(
                 random_injection_rate=random_injection_rate,
                 local_trials=local_trials,
                 min_terminal_separation=separation,
+                require_full_hull=require_full_hull,
                 seed=run_seed,
             )
             label = f"four_terminal_sep_{separation:.3f}_seed_{run_seed}"
@@ -729,6 +777,11 @@ def run_min_separation_sweep(
         hull3_fraction = sum(
             1 for outcome in bucket_outcomes if int(outcome.best.metadata["hull_size"]) == 3
         ) / len(bucket_outcomes)
+        full_hull_fraction = sum(
+            1
+            for outcome in bucket_outcomes
+            if int(outcome.best.metadata["hull_size"]) == outcome.config.num_terminals
+        ) / len(bucket_outcomes)
         boundary_hugging_fraction = sum(
             1
             for distance in min_pairwise
@@ -744,6 +797,7 @@ def run_min_separation_sweep(
                 mean_minimum_pairwise_distance=statistics.fmean(min_pairwise),
                 boundary_hugging_fraction=boundary_hugging_fraction,
                 hull3_fraction=hull3_fraction,
+                full_hull_fraction=full_hull_fraction,
                 best_label=best_outcome.label,
                 best_topology=best_outcome.best.topology,
             )
@@ -770,8 +824,8 @@ def write_min_separation_sweep_report(
         "",
         f"- Conjectured lower bound: `{STEINER_RATIO_CONJECTURE:.12f}`",
         "",
-        "| min separation | best ratio | median best ratio | mean gap | mean min pair | boundary-hugging frac | hull=3 frac | best topology |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| min separation | best ratio | median best ratio | mean gap | mean min pair | boundary-hugging frac | hull=3 frac | full-hull frac | best topology |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
 
     for row in sweep.rows:
@@ -784,6 +838,7 @@ def write_min_separation_sweep_report(
             f"{row.mean_minimum_pairwise_distance:.6f} | "
             f"{row.boundary_hugging_fraction:.3f} | "
             f"{row.hull3_fraction:.3f} | "
+            f"{row.full_hull_fraction:.3f} | "
             f"{row.best_topology} |"
         )
 
@@ -794,6 +849,7 @@ def write_min_separation_sweep_report(
             "",
             "- High boundary-hugging fraction means the search is pushing terminals against the minimum-separation floor.",
             "- High hull=3 fraction suggests many best candidates still place one terminal effectively inside a triangle-like hull.",
+            "- High full-hull fraction means the best candidates are genuinely using all terminals as extreme points.",
             "- If best ratios rise as separation increases, the low-ratio regime is likely driven by terminal clustering rather than a stable 4-terminal extremizer.",
             "",
         ]

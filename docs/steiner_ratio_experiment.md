@@ -19,6 +19,7 @@ Run the experiment with:
 python -m run.steiner_ratio_search
 python -m run.steiner_ratio_search --terminals 4 --runs 3 --min-separation 0.1
 python -m run.steiner_ratio_sweep
+python -m run.steiner_ratio_sweep --require-full-hull
 ```
 
 Artifacts are written to `outputs/steiner_ratio_search_<timestamp>/`:
@@ -51,3 +52,9 @@ That means:
 For extremal-structure discovery, `--min-separation` is important. Without it, the search tends to collapse two terminals together and imitate the `3`-terminal extremizer instead of revealing a genuinely new `4`-terminal family.
 
 The dedicated sweep runner is useful when the question is structural rather than adversarial: it lets you see how the best ratio changes as terminal collisions are ruled out.
+
+`--require-full-hull` is the stronger nondegeneracy mode for `4` terminals:
+
+- it enforces `hull_size == 4` during the search rather than only reporting it afterward,
+- it removes triangle-like hull-3 best candidates from the search space,
+- and it is the right mode when the question is specifically about genuinely four-point extremal structure.

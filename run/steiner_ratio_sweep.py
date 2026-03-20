@@ -46,6 +46,11 @@ def main() -> int:
         help="Fraction of each generation replaced with fresh random samples.",
     )
     parser.add_argument("--local-trials", type=int, default=3, help="Mutation attempts per offspring.")
+    parser.add_argument(
+        "--require-full-hull",
+        action="store_true",
+        help="Require every accepted point set to place all terminals on the convex hull.",
+    )
     parser.add_argument("--output-dir", type=str, default=None, help="Directory for reports.")
     args = parser.parse_args()
 
@@ -62,6 +67,7 @@ def main() -> int:
         crossover_rate=args.crossover_rate,
         random_injection_rate=args.random_injection_rate,
         local_trials=args.local_trials,
+        require_full_hull=args.require_full_hull,
         seed=args.seed,
     )
 
@@ -77,9 +83,11 @@ def main() -> int:
                 "mean_gap_to_conjecture": row.mean_gap_to_conjecture,
                 "boundary_hugging_fraction": row.boundary_hugging_fraction,
                 "hull3_fraction": row.hull3_fraction,
+                "full_hull_fraction": row.full_hull_fraction,
             }
             for row in sweep.rows
         ],
+        "require_full_hull": args.require_full_hull,
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))

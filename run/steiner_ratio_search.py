@@ -50,6 +50,7 @@ def _build_configs(args: argparse.Namespace) -> List[SearchConfig]:
                         random_injection_rate=args.random_injection_rate,
                         local_trials=args.local_trials,
                         min_terminal_separation=min_separation,
+                        require_full_hull=args.require_full_hull,
                         seed=args.seed + seed_offset,
                     )
                 )
@@ -58,10 +59,11 @@ def _build_configs(args: argparse.Namespace) -> List[SearchConfig]:
 
 def _label_for_config(config: SearchConfig) -> str:
     separation_tag = str(config.min_terminal_separation).replace(".", "p")
+    hull_tag = "fullhull" if config.require_full_hull else "anyhull"
     if config.num_terminals == 3:
-        return f"three_terminal_exact_search_sep_{separation_tag}_seed_{config.seed}"
+        return f"three_terminal_exact_search_{hull_tag}_sep_{separation_tag}_seed_{config.seed}"
     if config.num_terminals == 4:
-        return f"four_terminal_upper_bound_search_sep_{separation_tag}_seed_{config.seed}"
+        return f"four_terminal_upper_bound_search_{hull_tag}_sep_{separation_tag}_seed_{config.seed}"
     return f"{config.num_terminals}_terminal_search"
 
 
@@ -79,6 +81,8 @@ def _summary_payload(outcomes: Iterable[SearchOutcome]) -> dict:
                 "best_topology": outcome.best.topology,
                 "stored_candidates": len(outcome.top_candidates),
                 "minimum_pairwise_distance": outcome.best.metadata.get("minimum_pairwise_distance"),
+                "hull_size": outcome.best.metadata.get("hull_size"),
+                "require_full_hull": outcome.config.require_full_hull,
             }
             for outcome in outcome_list
         ],
@@ -94,6 +98,12 @@ def _summary_payload(outcomes: Iterable[SearchOutcome]) -> dict:
                 "mean_gap": summary.mean_gap,
                 "mean_minimum_pairwise_distance": summary.mean_minimum_pairwise_distance,
                 "best_candidate_hull_sizes": list(summary.best_candidate_hull_sizes),
+                "require_full_hull": all(
+                    outcome.config.require_full_hull
+                    for outcome in outcome_list
+                    if outcome.config.num_terminals == summary.num_terminals
+                    and outcome.config.min_terminal_separation == summary.min_terminal_separation
+                ),
             }
             for summary in sweep_summaries
         ],
@@ -144,6 +154,7 @@ def _write_sweep_report(summary: dict, output_dir: Path) -> None:
                 f"- Mean gap: `{row['mean_gap']:.12f}`",
                 f"- Mean minimum pairwise distance: `{row['mean_minimum_pairwise_distance']:.12f}`",
                 f"- Hull sizes of best runs: `{row['best_candidate_hull_sizes']}`",
+                f"- Require full hull: `{row['require_full_hull']}`",
                 "",
             ]
         )
@@ -188,6 +199,11 @@ def main() -> int:
         nargs="+",
         default=None,
         help="Run a sweep over multiple minimum-separation values.",
+    )
+    parser.add_argument(
+        "--require-full-hull",
+        action="store_true",
+        help="Require every accepted point set to have all terminals on the convex hull.",
     )
     parser.add_argument("--seed", type=int, default=0, help="Base RNG seed.")
     parser.add_argument("--output-dir", type=str, default=None, help="Directory for reports.")

@@ -4,8 +4,8 @@ Date: 2026-03-20
 
 ## What this experiment does
 
-The new `run.steiner_ratio_search` runner treats point sets as the search object and
-minimizes `SMT(P) / MST(P)` directly.
+The new Steiner-ratio tooling treats point sets as the search object and minimizes
+`SMT(P) / MST(P)` directly.
 
 - `3` terminals use an exact evaluator via the geometric median.
 - `4` terminals use a valid upper bound built from the best of:
@@ -21,6 +21,7 @@ python -m run.steiner_ratio_search --runs 2 --population-size 56 --generations 9
 python -m run.steiner_ratio_search --terminals 4 --runs 4 --population-size 72 --generations 140
 python -m run.steiner_ratio_search --terminals 4 --runs 4 --population-size 72 --generations 140 --min-separation 0.05
 python -m run.steiner_ratio_sweep --runs 3 --population-size 56 --generations 90
+python -m run.steiner_ratio_sweep --runs 2 --population-size 48 --generations 80 --require-full-hull
 ```
 
 ## Current search results
@@ -81,13 +82,32 @@ A direct sweep over `min_terminal_separation in {0, 0.02, 0.05, 0.1, 0.15}` with
 - `0.10`: best ratio `0.873884746816`, mean gap `0.008378782964`, boundary-hugging fraction `1.000`
 - `0.15`: best ratio `0.878884946028`, mean gap `0.012921322757`, boundary-hugging fraction `1.000`
 
-This is the cleanest signal so far:
+This is the cleanest signal for clustering:
 
 - best ratios rise steadily as the allowed collision scale is increased,
 - once the floor reaches `0.05`, the best candidates start hugging that floor,
 - by `0.10` and `0.15`, the search is fully constrained by the separation limit.
 
 So the low-ratio regime appears to be controlled mainly by terminal clustering. The scan does not support the existence of a robust new `4`-terminal extremizer below or even very near the conjectured bound.
+
+### Full-hull sweep
+
+To isolate genuinely nondegenerate `4`-point geometry, I also ran the sweep with
+`--require-full-hull`, which forces every accepted candidate to satisfy `hull_size == 4`.
+
+Results:
+
+- `0.00`: best ratio `0.868263196273`, mean gap `0.003602057429`, full-hull fraction `1.000`
+- `0.02`: best ratio `0.870537259024`, mean gap `0.004571752020`, full-hull fraction `1.000`
+- `0.05`: best ratio `0.871225379880`, mean gap `0.005741278943`, full-hull fraction `1.000`
+- `0.10`: best ratio `0.875216539012`, mean gap `0.009806039083`, full-hull fraction `1.000`
+- `0.15`: best ratio `0.877651855250`, mean gap `0.012356583142`, full-hull fraction `1.000`
+
+This adds a stronger structural conclusion:
+
+- even without a positive separation floor, once hull-3 degenerations are forbidden the best ratio already sits noticeably above `sqrt(3)/2`,
+- the low-ratio mechanism is therefore not just “any four points”, but specifically four points collapsing into a triangle-like hull,
+- and genuinely four-extreme-point candidates still do not show evidence of a counterexample family.
 
 ## Interpretation
 
@@ -96,10 +116,11 @@ So the low-ratio regime appears to be controlled mainly by terminal clustering. 
 - For `4` terminals, the dominant low-ratio mechanism is terminal clustering.
 - Minimum-separation constraints are essential if the goal is genuine structure discovery rather than rediscovering the triangle case in disguise.
 - The sweep result strengthens that claim because the best ratio moves away from the conjectured bound in a controlled, monotone way as clustering is forbidden.
+- The full-hull sweep strengthens it again: even before adding a positive separation floor, forbidding hull-3 candidates already raises the best observed ratio.
 
 ## Recommended next steps
 
-1. Add a convex-position-only mode to separate true `4`-point geometry from triangle-like hull-3 families.
-2. Keep the sweep runner, but increase runs per bucket and cluster the best candidates by hull size, pairing topology, and aspect ratio.
-3. Add a stricter “nondegenerate” mode that enforces both minimum separation and hull size `4`.
+1. Increase the full-hull sweep budget so each separation bucket gets at least `5-10` seeds.
+2. Add a stricter nondegenerate mode that enforces both `hull_size == 4` and a positive separation floor such as `0.05` or `0.1`.
+3. Cluster the best full-hull candidates by pairing topology and aspect ratio.
 4. Extend the framework to `5` terminals only after the constrained `4`-terminal picture stabilizes.
