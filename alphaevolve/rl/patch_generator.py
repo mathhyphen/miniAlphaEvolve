@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
 
 import torch
+import torch.nn.functional as F
 
 from .policy_network import PolicyNetwork, PolicyConfig, compute_advantages
 
@@ -129,6 +130,16 @@ class ExecutionResult:
     output: str = ""
 
 
+@dataclass(frozen=True)
+class PatchSample:
+    """A sampled policy action with its decoded patch."""
+
+    action: int
+    log_prob: float
+    value: float
+    patch: Patch
+
+
 @dataclass
 class CodeState:
     """Represents the current state of code for RL.
@@ -193,6 +204,7 @@ class PatchGenerator:
         self.max_patch_attempts = max_patch_attempts
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.policy.to(self.device)
+        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=1e-4)
 
     def tokenize_code(self, code: str, max_len: int = 512) -> torch.Tensor:
         """Tokenize code into integer tokens.
@@ -311,7 +323,7 @@ class PatchGenerator:
 
         action_type = (action // num_lines) % len(PatchType)
 
-        patch_type = PatchType(action_type)
+        patch_type = list(PatchType)[action_type]
 
         if patch_type == PatchType.INSERT:
             content = self._sample_code_snippet("insert")
@@ -375,7 +387,7 @@ class PatchGenerator:
         self,
         state: CodeState,
         deterministic: bool = False,
-    ) -> Patch:
+    ) -> PatchSample:
         """Generate a single patch from current state.
 
         Args:
@@ -413,10 +425,15 @@ class PatchGenerator:
 
         confidence = float(torch.exp(log_prob).cpu().item())
 
-        return self.action_to_patch(
-            action.item(),
-            state.code,
-            confidence=confidence,
+        return PatchSample(
+            action=action.item(),
+            log_prob=float(log_prob.cpu().item()),
+            value=float(value.cpu().item()),
+            patch=self.action_to_patch(
+                action.item(),
+                state.code,
+                confidence=confidence,
+            ),
         )
 
     def generate_patches(
@@ -424,7 +441,7 @@ class PatchGenerator:
         state: CodeState,
         num_patches: int = 5,
         deterministic: bool = False,
-    ) -> List[Patch]:
+    ) -> List[PatchSample]:
         """Generate multiple patches from current state.
 
         Args:
@@ -452,6 +469,7 @@ class PatchGenerator:
         actions: List[int],
         rewards: List[float],
         old_log_probs: List[float],
+        rollout_values: Optional[List[float]] = None,
         gamma: float = 0.99,
         lam: float = 0.95,
         clip_epsilon: float = 0.2,
@@ -512,11 +530,13 @@ class PatchGenerator:
             graph_batch,
         )
 
-        advantages, returns = compute_advantages(rewards, values.cpu().tolist(), gamma, lam)
+        rollout_values_list = rollout_values if rollout_values is not None else values.cpu().tolist()
+        advantages, returns = compute_advantages(rewards, rollout_values_list, gamma, lam)
         advantages_tensor = torch.tensor(advantages, dtype=torch.float32, device=self.device)
         returns_tensor = torch.tensor(returns, dtype=torch.float32, device=self.device)
 
-        advantages_tensor = (advantages_tensor - advantages_tensor.mean()) / (advantages_tensor.std() + 1e-8)
+        advantages_std = advantages_tensor.std(unbiased=False).clamp_min(1e-8)
+        advantages_tensor = (advantages_tensor - advantages_tensor.mean()) / advantages_std
 
         old_log_probs_tensor = torch.tensor(old_log_probs, dtype=torch.float32, device=self.device)
         ratio = torch.exp(log_probs - old_log_probs_tensor)
@@ -530,10 +550,9 @@ class PatchGenerator:
 
         total_loss = policy_loss + 0.5 * value_loss + 0.01 * entropy_loss
 
-        optimizer = torch.optim.Adam(self.policy.parameters(), lr=1e-4)
-        optimizer.zero_grad()
+        self.optimizer.zero_grad()
         total_loss.backward()
-        optimizer.step()
+        self.optimizer.step()
 
         return {
             "policy_loss": policy_loss.item(),
