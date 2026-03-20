@@ -1,103 +1,115 @@
-# AlphaEvolve Parity Plan
+# Plan
 
 Date: 2026-03-21
 
 ## Goal
 
-Move this repository from a mixed RL / benchmark / research prototype toward a genuinely AlphaEvolve-like architecture for automatically verifiable coding tasks.
+Move this repository from "AlphaEvolve-inspired collection of research components" toward a more coherent AlphaEvolve-style system centered on LLM-driven program evolution.
 
-## Constraints
+## Ground Truth From Research
 
-- Do not break existing benchmark and research workflows.
-- Do not overwrite the user's uncommitted experiment files.
-- Keep new work adjacent to, not inside, the current RL path unless integration is justified.
+Based on Google DeepMind's official AlphaEvolve materials, the defining architecture is:
 
-## Phase 1: Make the LLM scaffold executable
+1. problem definition + initial program + automatic evaluator
+2. program database / archive
+3. prompt sampler built from past trials and inspirations
+4. LLM-generated code diffs
+5. automatic execution and scoring
+6. archive update and repeat
 
-Status: partially started
+## Current State
 
-Tasks:
+Already present:
 
-1. Add a concrete model backend for [`alphaevolve/llm_evolution/__init__.py`](/D:/apps/AlphaEvolve/alphaevolve/llm_evolution/__init__.py).
-2. Add a small demo runner that executes the LLM loop on one automatically verifiable task.
-3. Persist archive entries, ancestry, prompts, and scores to disk.
+- sandboxed execution and deterministic evaluation
+- benchmark infrastructure
+- research workflows with archive-like reporting
+- minimal LLM-evolution scaffold with prompt-driven proposal interfaces
 
-Exit criteria:
+Still missing:
 
-- one end-to-end problem runs through `prompt -> diff -> evaluate -> archive`
-- results are reproducible from a CLI command
+- real LLM backend integration for the new scaffold
+- evolve-block parsing and block-scoped diff application
+- richer archive metadata and prompt construction
+- one unified CLI for code evolution experiments
+- stronger evaluator/controller orchestration
 
-## Phase 2: Add EVOLVE-BLOCK support
+## Execution Plan
 
-Tasks:
+### Phase 1: Make the LLM scaffold usable
 
-1. Implement parsing for `EVOLVE-BLOCK-START` / `EVOLVE-BLOCK-END`.
-2. Restrict diff application to marked regions.
-3. Preserve the surrounding code scaffold exactly.
+1. Add a real model backend adapter under `alphaevolve/llm_evolution/`.
+2. Add prompt templates that include parent code, archive inspirations, scores, and evaluator feedback.
+3. Add a small end-to-end CLI that runs the new controller loop on a toy benchmark.
 
-Exit criteria:
+Success criteria:
 
-- a larger program can expose only selected regions to evolution
-- diff failures are isolated and recoverable
+- one command can run a prompt-driven proposal/evaluate/archive loop,
+- the controller uses a real model interface,
+- and results are persisted as reproducible artifacts.
 
-## Phase 3: Unify evaluator contracts
+### Phase 2: Add evolve-block semantics
 
-Tasks:
+1. Introduce a block marker format such as `EVOLVE-BLOCK-START` / `EVOLVE-BLOCK-END`.
+2. Parse mutable blocks from a larger code file.
+3. Restrict diff application to those blocks.
+4. Evaluate the reconstructed full program.
 
-1. Define a shared evaluator result schema containing correctness, scalar metrics, logs, and metadata.
-2. Adapt benchmark and LLM-evolution paths to emit that schema.
-3. Keep sandbox execution as the underlying execution boundary where practical.
+Success criteria:
 
-Exit criteria:
+- the system can evolve part of a larger program without replacing the whole file,
+- and tests verify block-scoped mutation behavior.
 
-- benchmark and LLM loops can share evaluator outputs
-- archive entries store more than a single scalar score
+### Phase 3: Enrich the archive
 
-## Phase 4: Strengthen prompt construction
+1. Extend `ProgramDatabase` to store:
+   - scores,
+   - proposal history,
+   - evaluator diagnostics,
+   - parent-child lineage,
+   - optional prompt metadata.
+2. Add archive sampling strategies for:
+   - best-so-far,
+   - diverse inspirations,
+   - recent successful variants.
 
-Tasks:
+Success criteria:
 
-1. Extend the prompt sampler to include rendered evaluation results.
-2. Add optional domain context such as equations, examples, and code snippets.
-3. Add prompt templates with stochastic formatting for diversity.
+- prompt construction can draw on more than just top scores,
+- and the archive supports lineage-aware analysis.
 
-Exit criteria:
+### Phase 4: Unify the code-evolution surface
 
-- prompts are built from parent code, archive inspirations, and structured feedback
-- prompt diversity is configurable
+1. Add a dedicated CLI for AlphaEvolve-style code evolution.
+2. Keep RL/PPO and research search loops separate from this main path.
+3. Document the intended boundaries between:
+   - benchmark infrastructure,
+   - code evolution,
+   - domain-specific research experiments.
 
-## Phase 5: Converge the archive
+Success criteria:
 
-Tasks:
+- a new contributor can identify the main AlphaEvolve-style workflow immediately,
+- and the repository reads as one system rather than several unrelated prototypes.
 
-1. Introduce a global archive abstraction for program candidates.
-2. Store prompts, proposals, ancestry, and evaluation artifacts together.
-3. Define parent/inspiration sampling policies over that archive.
+### Phase 5: Scale evaluation
 
-Exit criteria:
+1. Add evaluator-pool abstractions.
+2. Support multiple evaluation metrics and richer feedback.
+3. Add artifact logging for every generation.
+4. Add long-run experiment reports.
 
-- future search loops use one archive abstraction instead of per-module ad hoc stores
-- archive-backed prompt construction is the default path
+Success criteria:
 
-## Phase 6: Run one canonical AlphaEvolve-style demo
+- larger searches can be run reproducibly,
+- and prompt/evaluator/archive interactions are inspectable after the run.
 
-Candidate domains:
+## Non-Goals For Now
 
-- a deterministic algorithmic benchmark case
-- matrix multiplication micro-optimization
-- one constrained code-generation task with objective evaluation
+- replacing the Steiner-ratio research line
+- deleting the PPO/RL code
+- claiming full parity with Google DeepMind AlphaEvolve before a real LLM-backed controller exists
 
-Exit criteria:
+## Immediate Next Step
 
-- the repository demonstrates one full LLM-diff evolutionary run
-- the run uses a real backend, EVOLVE-BLOCK support, archive-backed prompting, and automatic evaluation
-
-## Near-Term Priority
-
-If only one next coding step is taken, it should be:
-
-- implement Phase 1 plus the smallest usable subset of Phase 2
-
-Reason:
-
-- until the repository can evolve a marked code block with a real model backend, it is still only architecturally adjacent to AlphaEvolve rather than operationally similar.
+Implement Phase 1 first: connect the new prompt-driven scaffold to a real model backend and add one toy end-to-end CLI demo.

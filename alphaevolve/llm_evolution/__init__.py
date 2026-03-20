@@ -258,4 +258,31 @@ __all__ = [
     "SimplePromptSampler",
     "TextGenerator",
     "run_evolution_loop",
+    # MiniMax adapter
+    "MiniMaxTextGenerator",
+    "MiniMaxDiffProposer",
+    "create_minimax_proposer",
+    # Evaluator adapter
+    "FunctionEvaluator",
+    "create_evaluator",
 ]
+
+# Import adapter for convenience
+try:
+    from .minimax_adapter import (
+        MiniMaxTextGenerator,
+        MiniMaxDiffProposer,
+        create_minimax_proposer,
+    )
+except ImportError as e:
+    import warnings
+    warnings.warn(f"Could not import minimax_adapter: {e}")
+
+try:
+    from .evaluator_adapter import (
+        FunctionEvaluator,
+        create_evaluator,
+    )
+except ImportError as e:
+    import warnings
+    warnings.warn(f"Could not import evaluator_adapter: {e}")

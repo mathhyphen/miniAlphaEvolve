@@ -8,6 +8,7 @@ import asyncio
 import concurrent.futures
 import dataclasses
 import logging
+import math
 import os
 import sys
 import threading
@@ -112,7 +113,7 @@ def _set_timeout(timeout_seconds: float) -> None:
     """Set CPU timeout for the current process (Unix only)."""
     if sys.platform != "win32" and resource is not None:
         _, hard = resource.getrlimit(resource.RLIMIT_CPU)
-        resource.setrlimit(resource.RLIMIT_CPU, (int(timeout_seconds), hard))
+        resource.setrlimit(resource.RLIMIT_CPU, (math.ceil(timeout_seconds), hard))
 
 
 class SandboxExecutor:
