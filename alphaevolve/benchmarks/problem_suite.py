@@ -9,6 +9,20 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from alphaevolve.sandbox.executor import ExecutionConfig, SandboxExecutor
 
+# 导入新增的基准测试模块
+from alphaevolve.benchmarks.sorting_benchmark import (
+    SORTING_VALIDATORS as SORTING_VALIDATORS,
+    get_sorting_benchmark_cases as _get_sorting_cases,
+)
+from alphaevolve.benchmarks.search_benchmark import (
+    SEARCH_VALIDATORS as SEARCH_VALIDATORS,
+    get_search_benchmark_cases as _get_search_cases,
+)
+from alphaevolve.benchmarks.graph_benchmark import (
+    GRAPH_VALIDATORS as GRAPH_VALIDATORS,
+    get_graph_benchmark_cases as _get_graph_cases,
+)
+
 MST_BASELINE_CODE = """def mst(edges):
     if not edges:
         return 0.0
@@ -227,6 +241,16 @@ def _validate_steiner_not_worse_than_mst(case: BenchmarkCase, output: Any) -> Va
 VALIDATORS = {
     "mst_exact": _validate_mst_exact,
     "steiner_not_worse_than_mst": _validate_steiner_not_worse_than_mst,
+    # 排序验证器
+    "sorted": SORTING_VALIDATORS["sorted"],
+    "sorted_stable": SORTING_VALIDATORS["sorted_stable"],
+    # 搜索验证器
+    "search_index": SEARCH_VALIDATORS["search_index"],
+    "search_found": SEARCH_VALIDATORS["search_found"],
+    # 图遍历验证器
+    "traversal": GRAPH_VALIDATORS["traversal"],
+    "bfs_order": GRAPH_VALIDATORS["bfs_order"],
+    "dfs_order": GRAPH_VALIDATORS["dfs_order"],
 }
 
 
@@ -310,6 +334,53 @@ def filter_cases(
         wanted = set(case_ids)
         selected = [case for case in selected if case.case_id in wanted]
     return selected
+
+
+def get_all_benchmarks() -> List[BenchmarkCase]:
+    """返回所有基准测试用例.
+
+    包含:
+    - MST (Minimum Spanning Tree) 问题
+    - Steiner Tree 问题
+    - 排序算法问题
+    - 搜索算法问题
+    - 图遍历问题
+
+    Returns:
+        所有基准测试用例列表
+    """
+    all_cases: List[BenchmarkCase] = []
+    all_cases.extend(build_20_problem_suite())  # MST + Steiner
+    all_cases.extend(_get_sorting_cases())
+    all_cases.extend(_get_search_cases())
+    all_cases.extend(_get_graph_cases())
+    return all_cases
+
+
+def filter_by_difficulty(
+    cases: Sequence[BenchmarkCase],
+    difficulty: str,
+) -> List[BenchmarkCase]:
+    """按难度级别筛选基准测试用例.
+
+    Args:
+        cases: 基准测试用例序列
+        difficulty: 难度级别 ("easy", "medium", "hard")
+
+    Returns:
+        符合指定难度级别的用例列表
+
+    Raises:
+        ValueError: 当难度级别无效时
+    """
+    valid_difficulties = {"easy", "medium", "hard"}
+    if difficulty not in valid_difficulties:
+        raise ValueError(f"无效的难度级别: {difficulty}. 可选值: {valid_difficulties}")
+
+    return [
+        case for case in cases
+        if case.metadata.get("difficulty") == difficulty
+    ]
 
 
 def run_problem_suite(
