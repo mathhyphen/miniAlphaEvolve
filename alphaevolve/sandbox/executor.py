@@ -6,20 +6,27 @@ with support for timeout, memory limits, and isolation.
 
 import asyncio
 import concurrent.futures
-import contextlib
-import copy
 import dataclasses
 import logging
-import multiprocessing
+import math
 import os
-import resource
-import signal
 import sys
 import threading
+import time
 import typing as T
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - platform dependent
+    resource = None
+
+try:
+    import psutil
+except ImportError:  # pragma: no cover - optional dependency
+    psutil = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -91,22 +98,22 @@ class ResourceTracker:
 
 def _get_time() -> float:
     """Get current time in seconds."""
-    return asyncio.get_event_loop().time()
+    return time.perf_counter()
 
 
 def _set_memory_limit(limit_mb: float) -> None:
     """Set memory limit for the current process (Unix only)."""
-    if sys.platform != "win32":
-        soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    if sys.platform != "win32" and resource is not None:
+        _, hard = resource.getrlimit(resource.RLIMIT_AS)
         limit_bytes = int(limit_mb * 1024 * 1024)
         resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, hard))
 
 
 def _set_timeout(timeout_seconds: float) -> None:
     """Set CPU timeout for the current process (Unix only)."""
-    if sys.platform != "win32":
-        soft, hard = resource.getrlimit(resource.RLIMIT_CPU)
-        resource.setrlimit(resource.RLIMIT_CPU, (timeout_seconds, hard))
+    if sys.platform != "win32" and resource is not None:
+        _, hard = resource.getrlimit(resource.RLIMIT_CPU)
+        resource.setrlimit(resource.RLIMIT_CPU, (math.ceil(timeout_seconds), hard))
 
 
 class SandboxExecutor:
@@ -206,8 +213,8 @@ class SandboxExecutor:
                 raise TimeoutError(
                     f"Execution exceeded timeout of {config.timeout_seconds}s"
                 )
-            except concurrent.futures.ExecutionError as e:
-                raise ExecutionError(f"Execution error: {e cause}")
+            except Exception as e:
+                raise ExecutionError(f"Execution error: {e}") from e
 
 
 def _run_in_subprocess(
@@ -233,7 +240,8 @@ def _run_in_subprocess(
         nonlocal peak_memory
         while True:
             try:
-                import psutil
+                if psutil is None:
+                    return
                 process = psutil.Process(os.getpid())
                 memory = process.memory_info().rss
                 if memory > peak_memory:
@@ -243,7 +251,7 @@ def _run_in_subprocess(
                 break
 
     memory_thread = None
-    if "psutil" in sys.modules:
+    if psutil is not None:
         memory_thread = threading.Thread(target=track_memory, daemon=True)
         memory_thread.start()
 

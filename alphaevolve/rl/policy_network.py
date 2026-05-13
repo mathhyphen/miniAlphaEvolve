@@ -197,6 +197,12 @@ class PolicyNetwork(nn.Module):
         Returns:
             Tuple of (action_logits, value_estimate)
         """
+        self._validate_batch_shapes(
+            code_tokens,
+            code_mask,
+            execution_history,
+            graph_features,
+        )
         batch_size = code_tokens.size(0)
 
         # Encode code
@@ -208,7 +214,8 @@ class PolicyNetwork(nn.Module):
 
         # Pool code embeddings (mean pooling)
         if code_mask is not None:
-            code_pooled = (code_emb * code_mask.unsqueeze(-1)).sum(dim=1) / code_mask.sum(dim=1, keepdim=True)
+            denom = code_mask.sum(dim=1, keepdim=True).clamp_min(1.0)
+            code_pooled = (code_emb * code_mask.unsqueeze(-1)).sum(dim=1) / denom
         else:
             code_pooled = code_emb.mean(dim=1)
 
@@ -235,7 +242,53 @@ class PolicyNetwork(nn.Module):
         action_logits = self.action_head(state_encoded)
         value_estimate = self.value_head(state_encoded).squeeze(-1)
 
+        if not torch.isfinite(action_logits).all():
+            raise ValueError("PolicyNetwork produced non-finite action logits.")
+        if not torch.isfinite(value_estimate).all():
+            raise ValueError("PolicyNetwork produced non-finite value estimates.")
+
         return action_logits, value_estimate
+
+    def _validate_batch_shapes(
+        self,
+        code_tokens: Tensor,
+        code_mask: Optional[Tensor],
+        execution_history: Optional[Tensor],
+        graph_features: Optional[Tensor],
+    ) -> None:
+        """Fail fast on inconsistent tensor ranks or batch sizes."""
+        batch_size = code_tokens.size(0)
+        if code_tokens.dim() != 2:
+            raise ValueError(f"code_tokens must have shape (batch, seq_len), got {tuple(code_tokens.shape)}")
+
+        if code_mask is not None:
+            if code_mask.dim() != 2:
+                raise ValueError(f"code_mask must have shape (batch, seq_len), got {tuple(code_mask.shape)}")
+            if code_mask.shape != code_tokens.shape:
+                raise ValueError(
+                    f"code_mask shape {tuple(code_mask.shape)} must match code_tokens shape {tuple(code_tokens.shape)}"
+                )
+
+        if execution_history is not None:
+            if execution_history.dim() != 3:
+                raise ValueError(
+                    "execution_history must have shape (batch, history_len, history_dim), "
+                    f"got {tuple(execution_history.shape)}"
+                )
+            if execution_history.size(0) != batch_size:
+                raise ValueError(
+                    f"execution_history batch {execution_history.size(0)} does not match code_tokens batch {batch_size}"
+                )
+
+        if graph_features is not None:
+            if graph_features.dim() != 2:
+                raise ValueError(
+                    f"graph_features must have shape (batch, graph_dim), got {tuple(graph_features.shape)}"
+                )
+            if graph_features.size(0) != batch_size:
+                raise ValueError(
+                    f"graph_features batch {graph_features.size(0)} does not match code_tokens batch {batch_size}"
+                )
 
     def get_action(
         self,
@@ -262,12 +315,12 @@ class PolicyNetwork(nn.Module):
         )
 
         probs = F.softmax(action_logits, dim=-1)
+        dist = torch.distributions.Categorical(probs)
 
         if deterministic:
             action = torch.argmax(probs, dim=-1)
-            log_prob = torch.zeros_like(action, dtype=torch.float32)
+            log_prob = dist.log_prob(action)
         else:
-            dist = torch.distributions.Categorical(probs)
             action = dist.sample()
             log_prob = dist.log_prob(action)
 

@@ -334,7 +334,7 @@ class SteinerPWA(PopulationWideArchive):
             metadata=metadata or {"type": "steiner"},
         )
 
-        return self._add_snapshot_to_cell(snapshot, strategy, tier)
+        return self._add_to_cell(snapshot, strategy, tier)
 
     def _generate_id(self, code: str) -> str:
         """Generate unique ID for snapshot."""

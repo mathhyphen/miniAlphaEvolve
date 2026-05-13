@@ -1,5 +1,6 @@
 """Evolution Loop for AlphaEvolve RL training - PPO-based code patch evolution."""
 
+import copy
 import json
 import logging
 import os
@@ -11,8 +12,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 
-from alphaevolve.rl.policy_network import PolicyConfig, PolicyNetwork, compute_advantages
-from alphaevolve.rl.patch_generator import CodeState, ExecutionResult, Patch, PatchGenerator
+from alphaevolve.rl.policy_network import PolicyConfig, PolicyNetwork
+from alphaevolve.rl.patch_generator import (
+    CodeState,
+    ExecutionResult,
+    Patch,
+    PatchGenerator,
+    PatchSample,
+)
 from alphaevolve.sandbox.executor import ExecutionConfig, ExecutionResult as ExecResult, SandboxExecutor
 from alphaevolve.sandbox.metrics import MetricsCollector, PerformanceTracker
 from alphaevolve.archive.pwa import PWArchiveConfig, PopulationWideArchive
@@ -46,6 +53,22 @@ class EpisodeResult:
     total_reward: float
     latency_ms: float
     improvement_ratio: float
+    trajectory: List["TrajectoryStep"]
+
+
+@dataclass(frozen=True)
+class TrajectoryStep:
+    """A single PPO rollout step captured from the live trajectory."""
+
+    state_code: str
+    execution_history: List[ExecutionResult]
+    fitness_history: List[float]
+    graph_features: Optional[List[float]]
+    action: int
+    old_log_prob: float
+    value: float
+    patch: Patch
+    reward: float
 
 
 class EvolutionLoop:
@@ -115,24 +138,16 @@ class EvolutionLoop:
     return []
 """
 
-    def _generate_patches(self, state: CodeState, num_patches: int) -> Tuple[List[Patch], List[float], List[float]]:
+    def _generate_patches(self, state: CodeState, num_patches: int) -> List[PatchSample]:
         """Generate patches using policy network."""
-        patches, log_probs, values = [], [], []
+        samples: List[PatchSample] = []
         for _ in range(num_patches):
             try:
-                code_tokens = self.patch_gen.tokenize_code(state.code)
-                code_mask = (code_tokens != 0).float()
-                history = self.patch_gen.encode_execution_history(state.execution_history) if state.execution_history else None
-                graph = torch.tensor([state.graph_features[:64]], dtype=torch.float32, device=self.device) if state.graph_features else self.patch_gen.extract_graph_features(state.code)
-
-                action, log_prob, value = self.policy.get_action(code_tokens, code_mask, history, graph, deterministic=False)
-                patch = self.patch_gen.action_to_patch(action.item(), state.code, confidence=float(torch.exp(log_prob).cpu().item()))
-                patches.append(patch)
-                log_probs.append(log_prob.item())
-                values.append(value.item())
+                sample = self.patch_gen.generate_patch(state, deterministic=False)
+                samples.append(sample)
             except Exception as e:
                 logger.warning(f"Patch generation failed: {e}")
-        return patches, log_probs, values
+        return samples
 
     def _execute_patch(self, code: str, patch: Patch, problem: Any) -> Tuple[ExecResult, float]:
         """Execute patched code in sandbox."""
@@ -163,18 +178,40 @@ class EvolutionLoop:
         episode_id = f"ep_{self.episode_count}_{int(time.time())}"
         state = self._create_initial_state(problem)
         patches, rewards = [], []
+        trajectory: List[TrajectoryStep] = []
 
         for _ in range(self.config.patches_per_episode):
-            step_patches, _, _ = self._generate_patches(state, num_patches=1)
-            if not step_patches:
+            step_samples = self._generate_patches(state, num_patches=1)
+            if not step_samples:
                 continue
 
-            patch = step_patches[0]
+            sample = step_samples[0]
+            patch = sample.patch
             patches.append(patch)
+
+            state_snapshot = CodeState(
+                code=state.code,
+                execution_history=copy.deepcopy(state.execution_history),
+                fitness_history=list(state.fitness_history),
+                graph_features=list(state.graph_features) if state.graph_features else None,
+            )
             exec_result, latency_ms = self._execute_patch(state.code, patch, problem)
 
             reward = self._compute_reward(exec_result, latency_ms, self.config.baseline_latency)
             rewards.append(reward)
+            trajectory.append(
+                TrajectoryStep(
+                    state_code=state_snapshot.code,
+                    execution_history=state_snapshot.execution_history,
+                    fitness_history=state_snapshot.fitness_history,
+                    graph_features=state_snapshot.graph_features,
+                    action=sample.action,
+                    old_log_prob=sample.log_prob,
+                    value=sample.value,
+                    patch=patch,
+                    reward=reward,
+                )
+            )
 
             if exec_result.success:
                 try:
@@ -193,28 +230,32 @@ class EvolutionLoop:
         return EpisodeResult(
             episode_id=episode_id, iteration=iteration, initial_code=self._create_initial_state(problem).code,
             final_code=state.code, patches=patches, rewards=rewards, total_reward=total_reward,
-            latency_ms=final_latency, improvement_ratio=improvement_ratio
+            latency_ms=final_latency, improvement_ratio=improvement_ratio, trajectory=trajectory
         )
 
     def _update_policy(self, episode_results: List[EpisodeResult]) -> Dict[str, float]:
         """Update policy using PPO."""
-        states, actions, rewards_list, old_log_probs = [], [], [], []
+        states, actions, rewards_list, old_log_probs, values = [], [], [], [], []
         for result in episode_results:
-            state = CodeState(code=result.initial_code, execution_history=[], fitness_history=[])
-            for i, patch in enumerate(result.patches):
-                states.append(state)
-                actions.append(hash(patch.description) % self.policy.cfg.num_actions)
-                rewards_list.append(result.rewards[i] if i < len(result.rewards) else 0.0)
-                old_log_probs.append(0.0)
+            for step in result.trajectory:
+                states.append(
+                    CodeState(
+                        code=step.state_code,
+                        execution_history=copy.deepcopy(step.execution_history),
+                        fitness_history=list(step.fitness_history),
+                        graph_features=list(step.graph_features) if step.graph_features else None,
+                    )
+                )
+                actions.append(step.action)
+                rewards_list.append(step.reward)
+                old_log_probs.append(step.old_log_prob)
+                values.append(step.value)
 
         if not states:
             return {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0}
 
-        values = [0.0] * len(rewards_list)
-        advantages, _ = compute_advantages(rewards_list, values, gamma=self.config.gamma, lam=self.config.lam)
-
         return self.patch_gen.update_policy(states=states, actions=actions, rewards=rewards_list,
-                                           old_log_probs=old_log_probs, gamma=self.config.gamma,
+                                           old_log_probs=old_log_probs, rollout_values=values, gamma=self.config.gamma,
                                            lam=self.config.lam, clip_epsilon=self.config.clip_epsilon)
 
     def _update_archive(self, episode_results: List[EpisodeResult], iteration: int) -> None:
@@ -233,6 +274,7 @@ class EvolutionLoop:
 
         torch.save({
             "iteration": iteration, "model_state_dict": self.policy.state_dict(),
+            "optimizer_state_dict": self.patch_gen.optimizer.state_dict(),
             "best_improvement": self.best_improvement, "episode_count": self.episode_count,
             "config": {"num_iterations": self.config.num_iterations, "gamma": self.config.gamma, "lam": self.config.lam}
         }, ckpt_path / "policy.pt")
@@ -249,6 +291,8 @@ class EvolutionLoop:
         checkpoint_path = Path(checkpoint_path)
         state = torch.load(checkpoint_path / "policy.pt")
         self.policy.load_state_dict(state["model_state_dict"])
+        if "optimizer_state_dict" in state:
+            self.patch_gen.optimizer.load_state_dict(state["optimizer_state_dict"])
         self.current_iteration = state["iteration"]
         self.best_improvement = state.get("best_improvement", 0.0)
         self.episode_count = state.get("episode_count", 0)

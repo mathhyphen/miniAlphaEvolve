@@ -1,8 +1,8 @@
 """AlphaEvolve Redesign - CLI Pipeline Entry Point.
 
 Usage:
-    python -m alphaevolve.run.pipeline --problem steiner_tree --iterations 1000
-    python -m alphaevolve.run.pipeline --problem mst --checkpoint checkpoint.pt
+    python -m run.pipeline --problem steiner_tree --iterations 1000
+    python -m run.pipeline --problem mst --checkpoint checkpoint.pt
 """
 
 import argparse
@@ -48,18 +48,57 @@ def register_problem(name: str, desc: str, code: str, func: str,
 register_problem("steiner_tree", "Euclidean Steiner Tree",
     '''def steiner_tree(terminals):
     import math
-    if len(terminals) < 2: return 0.0
-    return sum(math.sqrt((terminals[i][0]-terminals[j][0])**2 + (terminals[i][1]-terminals[j][1])**2)
-                for i in range(len(terminals)) for j in range(i+1, len(terminals)))''',
+    if len(terminals) < 2:
+        return 0.0
+    remaining = set(range(1, len(terminals)))
+    in_tree = {0}
+    total = 0.0
+    while remaining:
+        best_index = None
+        best_distance = float("inf")
+        for source in in_tree:
+            sx, sy = terminals[source]
+            for target in remaining:
+                tx, ty = terminals[target]
+                distance = math.hypot(sx - tx, sy - ty)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_index = target
+        in_tree.add(best_index)
+        remaining.remove(best_index)
+        total += best_distance
+    return total''',
     "steiner_tree", 100.0, [[(0,0),(1,1),(2,0)], [(0,0),(1,0),(0.5,0.866)]])
 
 register_problem("mst", "Minimum Spanning Tree",
     '''def mst(edges):
-    if not edges: return 0.0
-    s = sorted(edges, key=lambda x: x[2])
-    p = list(range(max(max(e[:2]) for e in edges) + 1))
-    def f(x): return x if p[x] == x else (p.__setitem__(x, f(p[x])), p[x])[1]
-    return sum(w for u, v, w in s if (pu, pv := f(u), f(v)) and pu != pv and p.__setitem__(pu, pv) is None)''',
+    if not edges:
+        return 0.0
+    max_node = max(max(u, v) for u, v, _ in edges)
+    parent = list(range(max_node + 1))
+    rank = [0] * (max_node + 1)
+    def find(node):
+        if parent[node] != node:
+            parent[node] = find(parent[node])
+        return parent[node]
+    def union(left, right):
+        root_left = find(left)
+        root_right = find(right)
+        if root_left == root_right:
+            return False
+        if rank[root_left] < rank[root_right]:
+            parent[root_left] = root_right
+        elif rank[root_left] > rank[root_right]:
+            parent[root_right] = root_left
+        else:
+            parent[root_right] = root_left
+            rank[root_left] += 1
+        return True
+    total = 0.0
+    for left, right, weight in sorted(edges, key=lambda edge: edge[2]):
+        if union(left, right):
+            total += weight
+    return total''',
     "mst", 50.0, [[(0,1,1),(1,2,2),(0,2,3)], [(0,1,5),(1,2,3),(2,3,1)]])
 
 
@@ -92,9 +131,12 @@ class EvolutionLoop:
         return p
 
     def _eval(self, code: str) -> ExecutionResult:
-        r = self.executor.execute(code, self.problem.baseline_function,
-                                  (self.problem.test_cases[0] if self.problem.test_cases else [],),
-                                  ExecutionConfig(timeout_seconds=30.0))
+        r = self.executor.execute(
+            code=code,
+            function=self.problem.baseline_function,
+            args=((self.problem.test_cases[0] if self.problem.test_cases else []),),
+            config=ExecutionConfig(timeout_seconds=30.0),
+        )
         fit = 1.0 / (1.0 + r.output) if r.success and r.output else 0.0
         return ExecutionResult(passed=r.success, fitness=fit, execution_time=r.execution_time, error=r.error or "")
 

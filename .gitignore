@@ -56,3 +56,10 @@ Thumbs.db
 outputs/
 !outputs/.gitkeep
 settings.json
+
+# WebUI
+alphaevolve_webui/frontend/node_modules/
+alphaevolve_webui/frontend/dist/
+
+# Superpowers
+.superpowers/

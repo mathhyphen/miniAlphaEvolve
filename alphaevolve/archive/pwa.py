@@ -60,10 +60,10 @@ class LatencyImprovement:
     achieved_latency: float
 
     def __post_init__(self) -> None:
-        if not 0.0 <= self.improvement_ratio <= 1.0:
+        if not -1.0 <= self.improvement_ratio <= 1.0:
             object.__setattr__(
                 self, 'improvement_ratio',
-                max(0.0, min(1.0, self.improvement_ratio))
+                max(-1.0, min(1.0, self.improvement_ratio))
             )
 
 
@@ -162,7 +162,7 @@ class PerformanceTier:
             List of performance tiers from worst to best
         """
         return [
-            cls("counterexample", 0.0, 0.01),      # No/worse improvement
+            cls("counterexample", -1.0, 0.01),     # No/worse improvement
             cls("baseline", 0.01, 0.1),            # Below MST improvement
             cls("moderate", 0.1, 0.3),             # Moderate improvement
             cls("good", 0.3, 0.6),                 # Good improvement
@@ -387,12 +387,7 @@ class LatencyCalculator:
                 achieved_latency=achieved_latency,
             )
 
-        # Handle edge case where achieved is worse than baseline
-        if achieved_latency >= baseline:
-            improvement_ratio = max(0.0, 1.0 - achieved_latency / baseline)
-            improvement_ratio = -improvement_ratio  # Negative improvement
-        else:
-            improvement_ratio = 1.0 - achieved_latency / baseline
+        improvement_ratio = 1.0 - achieved_latency / baseline
 
         absolute_improvement = baseline - achieved_latency
 
@@ -588,7 +583,7 @@ class PopulationWideArchive:
                 return len(cell.snapshot_ids) < self._config.max_snapshots_per_cell
             return self._is_better(snapshot, cell.snapshot)
 
-        return len(cell.snapshot_ids) < self._config.max_snapshots_per_cell
+        return True
 
     def _is_better(
         self,
@@ -624,9 +619,9 @@ class PopulationWideArchive:
         while len(cell.snapshot_ids) > self._config.max_snapshots_per_cell:
             # Remove oldest/weakest snapshot
             oldest_id = cell.snapshot_ids.pop(0)
-            if oldest_id in self._snapshots:
-                del self._snapshots[oldest_id]
+            self._remove_snapshot_from_cell(cell, oldest_id)
             cell.replaced_count += 1
+            self._total_replaced += 1
 
         # Global capacity check
         if (self._config.max_total_snapshots and
@@ -655,8 +650,33 @@ class PopulationWideArchive:
             cell = self._cells[worst_cell_key]
             if cell.snapshot_ids:
                 removed_id = cell.snapshot_ids.pop(0)
-                if removed_id in self._snapshots:
-                    del self._snapshots[removed_id]
+                self._remove_snapshot_from_cell(cell, removed_id)
+                self._total_replaced += 1
+
+    def _remove_snapshot_from_cell(
+        self,
+        cell: StrategyCell,
+        snapshot_id: str,
+    ) -> None:
+        """Remove a snapshot and refresh the cell elite pointer."""
+        self._snapshots.pop(snapshot_id, None)
+        self._refresh_cell_snapshot(cell)
+
+    def _refresh_cell_snapshot(self, cell: StrategyCell) -> None:
+        """Recompute the current best snapshot for a cell."""
+        live_snapshots = [
+            self._snapshots[snapshot_id]
+            for snapshot_id in cell.snapshot_ids
+            if snapshot_id in self._snapshots
+        ]
+        if not live_snapshots:
+            cell.snapshot = None
+            return
+
+        cell.snapshot = max(
+            live_snapshots,
+            key=lambda snapshot: snapshot.improvement.improvement_ratio,
+        )
 
     def _get_tier(self, improvement_ratio: float) -> Optional[PerformanceTier]:
         """Get performance tier for improvement ratio.
@@ -850,9 +870,13 @@ class PopulationWideArchive:
         neighbors = []
 
         # Get tier index
+        current_tier = self._get_tier(snapshot.improvement.improvement_ratio)
+        if current_tier is None:
+            return neighbors
+
         tier_index = None
         for i, tier in enumerate(self._config.performance_tiers):
-            if tier.name == snapshot.improvement:
+            if tier.name == current_tier.name:
                 tier_index = i
                 break
 
@@ -1051,6 +1075,7 @@ class PopulationWideArchive:
 
         archive._total_added = data["stats"]["total_added"]
         archive._total_rejected = data["stats"]["total_rejected"]
+        archive._total_replaced = data["stats"].get("total_replaced", 0)
 
         logger.info(f"PWA archive loaded from {path}")
         return archive

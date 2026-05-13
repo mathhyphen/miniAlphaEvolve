@@ -8,10 +8,12 @@ from .evolution_loop import (
     EvolutionConfig,
     EvolutionLoop,
     EpisodeResult,
+    TrajectoryStep,
 )
 
 __all__ = [
     "EvolutionConfig",
     "EvolutionLoop",
     "EpisodeResult",
+    "TrajectoryStep",
 ]

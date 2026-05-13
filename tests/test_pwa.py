@@ -19,6 +19,7 @@ from alphaevolve.archive.pwa import (
     StrategyDetector,
     LatencyCalculator,
 )
+from alphaevolve.archive.steiner_pwa import create_steiner_pwa
 
 
 class TestLatencyImprovement:
@@ -118,6 +119,12 @@ class TestLatencyCalculator:
         improvement = calculator.calculate(achieved_latency=120.0)
         # Negative improvement (worse than baseline)
         assert improvement.improvement_ratio <= 0
+
+    def test_calculate_worse_preserves_negative_ratio(self):
+        """Test that worse-than-baseline latency preserves the negative ratio."""
+        calculator = LatencyCalculator(baseline_latency=100.0)
+        improvement = calculator.calculate(achieved_latency=120.0)
+        assert improvement.improvement_ratio == pytest.approx(-0.2)
 
 
 class TestPopulationWideArchive:
@@ -227,6 +234,90 @@ def centroid_solver(points):
         assert stats.total_snapshots == 2
         assert stats.total_added == 2
 
+    def test_per_cell_pruning_refreshes_best_snapshot(self):
+        """Test per-cell pruning keeps the cell elite in sync with live snapshots."""
+        config = PWArchiveConfig(
+            baseline_latency=100.0,
+            max_snapshots_per_cell=1,
+            elitism=False,
+        )
+        archive = PopulationWideArchive(config)
+
+        first = archive.add(
+            code="def centroid_solver(points): return 0.95",
+            latency=95.0,
+            generation=1,
+            strategy=AlgorithmicStrategy.CENTROID_BASED,
+        )
+        second = archive.add(
+            code="def centroid_solver(points): return 0.92",
+            latency=92.0,
+            generation=2,
+            strategy=AlgorithmicStrategy.CENTROID_BASED,
+        )
+
+        assert first is not None
+        assert second is not None
+
+        cell_snapshots = archive.get_by_strategy_and_tier(
+            AlgorithmicStrategy.CENTROID_BASED,
+            "baseline",
+        )
+        assert len(cell_snapshots) == 1
+        assert cell_snapshots[0].id == second.id
+        assert archive.get_best_by_strategy(AlgorithmicStrategy.CENTROID_BASED).id == second.id
+
+    def test_global_pruning_removes_stale_best_snapshot_references(self):
+        """Test global pruning keeps best queries aligned with live snapshots."""
+        config = PWArchiveConfig(
+            baseline_latency=100.0,
+            max_total_snapshots=1,
+        )
+        archive = PopulationWideArchive(config)
+
+        archive.add(
+            code="def fermat_solver(points): return 0.95",
+            latency=95.0,
+            generation=1,
+            strategy=AlgorithmicStrategy.FERMAT_BASED,
+        )
+        surviving = archive.add(
+            code="def centroid_solver(points): return 0.70",
+            latency=70.0,
+            generation=2,
+            strategy=AlgorithmicStrategy.CENTROID_BASED,
+        )
+
+        assert surviving is not None
+        snapshots = archive.get_all_snapshots()
+        assert len(snapshots) == 1
+        assert snapshots[0].id == surviving.id
+        assert archive.get_best_overall().id == surviving.id
+
+    def test_sample_neighbors_returns_adjacent_tiers(self):
+        """Test neighboring snapshots can be sampled from adjacent tiers."""
+        config = PWArchiveConfig(baseline_latency=100.0)
+        archive = PopulationWideArchive(config)
+
+        base = archive.add(
+            code="def heuristic_solver(points): return 0.80",
+            latency=80.0,
+            generation=1,
+            strategy=AlgorithmicStrategy.HEURISTIC,
+        )
+        neighbor = archive.add(
+            code="def heuristic_solver(points): return 0.65",
+            latency=65.0,
+            generation=2,
+            strategy=AlgorithmicStrategy.HEURISTIC,
+        )
+
+        assert base is not None
+        assert neighbor is not None
+        neighbors = archive.sample_neighbors(base)
+        neighbor_ids = {snapshot.id for snapshot in neighbors}
+        assert neighbor.id in neighbor_ids
+
 
 class TestPWARetrieval:
     """Tests for PWARetrieval."""
@@ -258,6 +349,25 @@ class TestPWARetrieval:
         retrieval = PWARetrieval(archive)
         score = retrieval.get_algorithm_diversity_score()
         assert score == 0.0  # Empty archive
+
+
+class TestSteinerPWA:
+    """Tests for Steiner-specific archive functionality."""
+
+    def test_add_solution_uses_base_archive_storage(self):
+        """Test Steiner solutions can be added without hitting missing helpers."""
+        archive, retrieval = create_steiner_pwa()
+        snapshot = archive.add_solution(
+            code="""
+def steiner_tree(points):
+    return 0.9
+""",
+            steiner_ratio=0.9,
+            generation=1,
+        )
+
+        assert snapshot is not None
+        assert archive.get_best_overall() is not None
 
         # Add solutions of different strategies
         archive.add(code="c1", latency=85.0, generation=1, strategy=AlgorithmicStrategy.FERMAT_BASED)
