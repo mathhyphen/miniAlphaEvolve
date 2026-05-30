@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react'
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
+  Area,
+  AreaChart,
 } from 'recharts'
 
 // 图表数据类型
@@ -39,7 +38,7 @@ function EvolutionChart() {
         const newGen = lastGen.generation + 1
         const newBest = Math.min(1, lastGen.bestScore + (Math.random() * 0.03))
         const newAvg = Math.min(newBest - 0.1, lastGen.avgScore + (Math.random() * 0.02))
-        
+
         // 保持最多20个数据点
         const newData = [...prev, { generation: newGen, bestScore: newBest, avgScore: newAvg }]
         return newData.slice(-20)
@@ -49,57 +48,119 @@ function EvolutionChart() {
     return () => clearInterval(interval)
   }, [])
 
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="glass-card !bg-slate-900/90 !border-slate-600/30 px-4 py-3">
+          <p className="text-slate-400 text-sm mb-2">Generation {label}</p>
+          {payload.map((entry: any, index: number) => (
+            <div key={index} className="flex items-center gap-2 text-sm">
+              <div
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="text-slate-300">{entry.name}:</span>
+              <span className="font-semibold" style={{ color: entry.color }}>
+                {(entry.value * 100).toFixed(1)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )
+    }
+    return null
+  }
+
   return (
-    <>
-      <div className="chart-title">进化曲线</div>
-      <ResponsiveContainer width="100%" height={250}>
-      <LineChart
-        data={data}
-        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-      >
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.2)" />
-        <XAxis
-          dataKey="generation"
-          stroke="rgba(255,255,255,0.7)"
-          tick={{ fill: 'rgba(255,255,255,0.7)' }}
-        />
-        <YAxis
-          stroke="rgba(255,255,255,0.7)"
-          tick={{ fill: 'rgba(255,255,255,0.7)' }}
-          domain={[0, 1]}
-          tickFormatter={(value) => (value * 100).toFixed(0) + '%'}
-        />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: 'rgba(0,0,0,0.8)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            borderRadius: '8px',
-          }}
-          labelStyle={{ color: '#fff' }}
-          formatter={(value: number) => [(value * 100).toFixed(1) + '%']}
-        />
-        <Legend />
-        <Line
-          type="monotone"
-          dataKey="bestScore"
-          name="最佳分数"
-          stroke="#38ef7d"
-          strokeWidth={2}
-          dot={{ fill: '#38ef7d', r: 4 }}
-          activeDot={{ r: 6 }}
-        />
-        <Line
-          type="monotone"
-          dataKey="avgScore"
-          name="平均分数"
-          stroke="#00d9ff"
-          strokeWidth={2}
-          dot={{ fill: '#00d9ff', r: 4 }}
-          activeDot={{ r: 6 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
-    </>
+    <div className="animate-fade-in">
+      {/* 标题区域 */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-100">Evolution Progress</h3>
+          <p className="text-sm text-slate-400 mt-0.5">Real-time fitness tracking</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400" />
+            <span className="text-sm text-slate-400">Best Score</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-gradient-to-r from-indigo-400 to-purple-400" />
+            <span className="text-sm text-slate-400">Average</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 图表 */}
+      <div className="h-[280px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={data}
+            margin={{ top: 10, right: 30, left: 20, bottom: 20 }}
+          >
+            <defs>
+              <linearGradient id="colorBest" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#34d399" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="colorAvg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="rgba(148, 163, 184, 0.1)"
+              vertical={false}
+            />
+            <XAxis
+              dataKey="generation"
+              stroke="rgba(148, 163, 184, 0.5)"
+              tick={{ fill: 'rgba(148, 163, 184, 0.7)', fontSize: 12 }}
+              axisLine={{ stroke: 'rgba(148, 163, 184, 0.2)' }}
+              tickLine={{ stroke: 'rgba(148, 163, 184, 0.2)' }}
+              label={{
+                value: 'Generation',
+                position: 'bottom',
+                offset: 5,
+                fill: 'rgba(148, 163, 184, 0.5)',
+                fontSize: 12,
+              }}
+            />
+            <YAxis
+              stroke="rgba(148, 163, 184, 0.5)"
+              tick={{ fill: 'rgba(148, 163, 184, 0.7)', fontSize: 12 }}
+              axisLine={{ stroke: 'rgba(148, 163, 184, 0.2)' }}
+              tickLine={{ stroke: 'rgba(148, 163, 184, 0.2)' }}
+              domain={[0, 1]}
+              tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Area
+              type="monotone"
+              dataKey="bestScore"
+              name="Best Score"
+              stroke="#34d399"
+              strokeWidth={2.5}
+              fill="url(#colorBest)"
+              dot={{ fill: '#34d399', r: 4, strokeWidth: 0 }}
+              activeDot={{ r: 6, fill: '#34d399', stroke: '#fff', strokeWidth: 2 }}
+            />
+            <Area
+              type="monotone"
+              dataKey="avgScore"
+              name="Average"
+              stroke="#818cf8"
+              strokeWidth={2.5}
+              fill="url(#colorAvg)"
+              dot={{ fill: '#818cf8', r: 4, strokeWidth: 0 }}
+              activeDot={{ r: 6, fill: '#818cf8', stroke: '#fff', strokeWidth: 2 }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   )
 }
 

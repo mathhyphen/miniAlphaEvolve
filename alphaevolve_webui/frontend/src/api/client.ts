@@ -1,140 +1,150 @@
-// API 客户端 - 与后端通信
-// 基础URL - 开发环境使用Vite代理，生产环境应配置为实际后端地址
 const API_BASE = '/api'
 
-// 请求选项类型
-interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
-  body?: unknown
-  headers?: Record<string, string>
+export interface EvaluationCase {
+  case_id: string
+  args: unknown[]
+  expected: unknown
+  description: string
+  validator: string
 }
 
-// 通用请求函数
-async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, headers = {} } = options
+export interface TaskSpec {
+  task_id: string
+  title: string
+  objective: string
+  initial_program: string
+  function_name: string
+  language: string
+  metric: string
+  constraints: string[]
+  tags: string[]
+  cases: EvaluationCase[]
+  baseline_program: string | null
+  benchmark_repetitions: number
+}
 
-  const config: RequestInit = {
-    method,
+export interface CaseFailure {
+  case_id: string
+  message: string
+  expected: string
+  actual: string
+}
+
+export interface EvaluationReport {
+  score: number
+  passed_cases: number
+  total_cases: number
+  failures: CaseFailure[]
+  execution_time: number
+  peak_memory_mb: number
+  metrics: Record<string, unknown>
+}
+
+export interface CandidateRecord {
+  candidate_id: string
+  generation: number
+  parent_id: string | null
+  program: string
+  score: number
+  evaluation: EvaluationReport
+  prompt: string
+  proposal: string
+  proposal_source: string
+  kept: boolean
+  created_at: string
+}
+
+export interface RunSnapshot {
+  run_id: string
+  task: TaskSpec
+  status: string
+  current_generation: number
+  max_generations: number
+  best_candidate: CandidateRecord | null
+  archive: CandidateRecord[]
+  history: CandidateRecord[]
+  created_at: string
+  updated_at: string
+}
+
+interface ApiEnvelope<T> {
+  success: boolean
+  data: T
+  error: string | null
+}
+
+export interface RunRequest {
+  task_id: string
+  generations: number
+  archive_size: number
+}
+
+export interface CustomCaseInput {
+  case_id: string
+  args: unknown[]
+  expected: unknown
+  description?: string
+  validator?: 'exact' | 'approx' | 'contains'
+}
+
+export interface CustomRunRequest {
+  title: string
+  objective: string
+  initial_program: string
+  function_name: string
+  constraints: string[]
+  cases: CustomCaseInput[]
+  generations: number
+  archive_size: number
+}
+
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
-      ...headers,
+      ...(options.headers ?? {}),
     },
-  }
-
-  if (body) {
-    config.body = JSON.stringify(body)
-  }
-
-  const response = await fetch(`${API_BASE}${endpoint}`, config)
+    ...options,
+  })
 
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`)
+    const message = await response.text()
+    throw new Error(message || `API request failed with ${response.status}`)
   }
 
-  return response.json()
+  const payload = (await response.json()) as ApiEnvelope<T>
+  if (!payload.success) {
+    throw new Error(payload.error ?? 'API request failed')
+  }
+  return payload.data
 }
 
-// 问题类型
-export interface Problem {
-  id: string
-  name: string
-  description: string
+export function listTasks(): Promise<TaskSpec[]> {
+  return request<TaskSpec[]>('/tasks')
 }
 
-// Benchmark类型
-export interface Benchmark {
-  id: string
-  name: string
-}
-
-// 演进状态类型
-export interface EvolutionStatus {
-  isRunning: boolean
-  generation: number
-  bestScore: number
-  avgScore: number
-  candidates: number
-  diversity: number
-}
-
-// 存档项类型
-export interface ArchiveItem {
-  id: string
-  generation: number
-  score: number
-  code: string
-  timestamp: string
-  parentId?: string
-}
-
-// 历史数据点类型
-export interface DataPoint {
-  generation: number
-  bestScore: number
-  avgScore: number
-}
-
-// 获取问题列表
-export async function getProblems(): Promise<Problem[]> {
-  return request<Problem[]>('/problems')
-}
-
-// 获取Benchmark列表
-export async function getBenchmarks(): Promise<Benchmark[]> {
-  return request<Benchmark[]>('/benchmarks')
-}
-
-// 获取演进状态
-export async function getStatus(): Promise<EvolutionStatus> {
-  return request<EvolutionStatus>('/status')
-}
-
-// 开始演进
-export async function startEvolution(problemId: string, benchmarkId: string): Promise<void> {
-  await request('/evolution/start', {
+export function startRun(input: RunRequest): Promise<RunSnapshot> {
+  return request<RunSnapshot>('/runs', {
     method: 'POST',
-    body: { problemId, benchmarkId },
+    body: JSON.stringify(input),
   })
 }
 
-// 停止演进
-export async function stopEvolution(): Promise<void> {
-  await request('/evolution/stop', { method: 'POST' })
+export function startCustomRun(input: CustomRunRequest): Promise<RunSnapshot> {
+  return request<RunSnapshot>('/runs/custom', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 
-// 获取历史存档列表
-export async function getArchive(): Promise<ArchiveItem[]> {
-  return request<ArchiveItem[]>('/archive')
+export function getRun(runId: string): Promise<RunSnapshot> {
+  return request<RunSnapshot>(`/runs/${runId}`)
 }
 
-// 获取指定存档的代码
-export async function getArchiveCode(id: string): Promise<{ code: string; version: number }> {
-  return request(`/archive/${id}`)
-}
-
-// 获取演进曲线数据
-export async function getEvolutionData(): Promise<DataPoint[]> {
-  return request<DataPoint[]>('/evolution/data')
-}
-
-// 导出存档
-export async function exportArchive(id: string): Promise<Blob> {
-  const response = await fetch(`${API_BASE}/archive/${id}/export`)
+export async function exportBestProgram(runId: string): Promise<string> {
+  const response = await fetch(`${API_BASE}/runs/${runId}/export`)
   if (!response.ok) {
-    throw new Error('导出失败')
+    throw new Error(`Export failed with ${response.status}`)
   }
-  return response.blob()
-}
-
-// API客户端对象 - 方便统一调用
-export const api = {
-  getProblems,
-  getBenchmarks,
-  getStatus,
-  startEvolution,
-  stopEvolution,
-  getArchive,
-  getArchiveCode,
-  getEvolutionData,
-  exportArchive,
+  return response.text()
 }

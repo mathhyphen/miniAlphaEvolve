@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Download, Eye } from 'lucide-react'
+import { Download, Eye, Clock, GitBranch, ChevronRight } from 'lucide-react'
 
 // 存档数据类型
 interface Archive {
@@ -11,22 +11,21 @@ interface Archive {
   parentId?: string
 }
 
-// 历史存档列表组件 - 显示所有历史版本，可点击查看详情，支持导出功能
+// 历史存档列表组件 - 现代表格设计
 function ArchiveList() {
   const [archives, setArchives] = useState<Archive[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   // 模拟加载存档数据
   useEffect(() => {
     setArchives([
-      { id: 'v12', generation: 12, score: 0.856, code: '# v12 code...', timestamp: '2026-04-01 10:30:00', parentId: 'v11' },
+      { id: 'v12', generation: 12, score: 0.856, code: '# v12 code...\ndef steiner_tree_optimized():\n    pass', timestamp: '2026-04-01 10:30:00', parentId: 'v11' },
       { id: 'v11', generation: 11, score: 0.823, code: '# v11 code...', timestamp: '2026-04-01 10:25:00', parentId: 'v10' },
       { id: 'v10', generation: 10, score: 0.798, code: '# v10 code...', timestamp: '2026-04-01 10:20:00', parentId: 'v9' },
       { id: 'v9', generation: 9, score: 0.765, code: '# v9 code...', timestamp: '2026-04-01 10:15:00', parentId: 'v8' },
       { id: 'v8', generation: 8, score: 0.721, code: '# v8 code...', timestamp: '2026-04-01 10:10:00', parentId: 'v7' },
       { id: 'v7', generation: 7, score: 0.680, code: '# v7 code...', timestamp: '2026-04-01 10:05:00', parentId: 'v6' },
-      { id: 'v6', generation: 6, score: 0.632, code: '# v6 code...', timestamp: '2026-04-01 10:00:00', parentId: 'v5' },
-      { id: 'v5', generation: 5, score: 0.580, code: '# v5 code...', timestamp: '2026-04-01 09:55:00' },
     ])
   }, [])
 
@@ -51,97 +50,140 @@ function ArchiveList() {
   // 查看存档详情
   const handleView = (id: string) => {
     setSelectedId(id)
-    console.log('查看存档:', id)
   }
 
+  const selectedArchive = archives.find(a => a.id === selectedId)
+
   return (
-    <div className="code-panel">
-      <div className="code-title">历史存档</div>
-      <div className="archive-list">
+    <div className="h-full flex flex-col">
+      {/* 标题 */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30">
+            <GitBranch className="w-5 h-5 text-cyan-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-100">Version Archive</h3>
+            <p className="text-xs text-slate-400">{archives.length} versions saved</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 存档列表 */}
+      <div className="flex-1 overflow-auto space-y-2 min-h-0">
         {archives.map((archive) => (
           <div
             key={archive.id}
-            className={`archive-item ${selectedId === archive.id ? 'selected' : ''}`}
+            className={`
+              relative p-4 rounded-lg border cursor-pointer transition-all duration-200
+              ${selectedId === archive.id
+                ? 'bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border-emerald-500/30'
+                : hoveredId === archive.id
+                  ? 'bg-slate-800/50 border-slate-600/30'
+                  : 'bg-slate-800/30 border-slate-700/20 hover:border-slate-600/40'
+              }
+            `}
             onClick={() => handleView(archive.id)}
+            onMouseEnter={() => setHoveredId(archive.id)}
+            onMouseLeave={() => setHoveredId(null)}
           >
-            <div className="archive-info">
-              <div className="archive-name">
-                v{archive.generation}
-                {selectedId === archive.id && ' (当前)'}
+            <div className="flex items-center justify-between">
+              {/* 左侧信息 */}
+              <div className="flex items-center gap-4">
+                {/* 版本号 */}
+                <div className={`
+                  w-12 h-12 rounded-xl flex flex-col items-center justify-center font-bold
+                  ${archive.id === 'v12'
+                    ? 'bg-gradient-to-br from-emerald-400 to-cyan-400 text-slate-900'
+                    : 'bg-slate-700/50 text-slate-300'
+                  }
+                `}>
+                  <span className="text-xs opacity-75">v</span>
+                  <span className="text-lg leading-none">{archive.generation}</span>
+                </div>
+
+                {/* 详情 */}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-slate-200">
+                      Version {archive.generation}
+                    </span>
+                    {archive.id === 'v12' && (
+                      <span className="badge badge-success text-[10px]">Current</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {archive.timestamp.split(' ')[1]}
+                    </span>
+                    {archive.parentId && (
+                      <span className="flex items-center gap-1">
+                        <GitBranch className="w-3 h-3" />
+                        {archive.parentId}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="archive-meta">
-                {archive.timestamp}
-                {archive.parentId && ` · 源自 ${archive.parentId}`}
+
+              {/* 右侧信息 */}
+              <div className="flex items-center gap-3">
+                {/* 分数 */}
+                <div className="text-right">
+                  <div className={`
+                    font-bold text-lg
+                    ${archive.score >= 0.8
+                      ? 'text-emerald-400'
+                      : archive.score >= 0.6
+                        ? 'text-amber-400'
+                        : 'text-slate-400'
+                    }
+                  `}>
+                    {(archive.score * 100).toFixed(1)}%
+                  </div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider">Score</div>
+                </div>
+
+                {/* 操作按钮 */}
+                <div className="flex items-center gap-1">
+                  <button
+                    className="btn-icon"
+                    onClick={(e) => handleExport(e, archive)}
+                    title="Export"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+                  <button
+                    className="btn-icon"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleView(archive.id)
+                    }}
+                    title="View"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                </div>
               </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="archive-score">{(archive.score * 100).toFixed(1)}%</span>
-              <button
-                className="btn-icon"
-                onClick={(e) => handleExport(e, archive)}
-                title="导出"
-              >
-                <Download size={14} />
-              </button>
-              <button
-                className="btn-icon"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleView(archive.id)
-                }}
-                title="查看"
-              >
-                <Eye size={14} />
-              </button>
             </div>
           </div>
         ))}
       </div>
 
       {/* 选中存档预览 */}
-      {selectedId && (
-        <div style={{
-          marginTop: '12px',
-          padding: '12px',
-          background: 'rgba(0, 0, 0, 0.2)',
-          borderRadius: '8px'
-        }}>
-          <div style={{ fontSize: '12px', color: '#a1a1aa', marginBottom: '8px' }}>
-            代码预览:
+      {selectedArchive && (
+        <div className="mt-4 p-4 rounded-lg bg-slate-900/50 border border-slate-700/30 animate-fade-in">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-slate-300">Code Preview</span>
+            <span className="badge badge-info text-xs">v{selectedArchive.generation}</span>
           </div>
-          <pre style={{
-            fontSize: '11px',
-            color: '#e0e0e0',
-            maxHeight: '80px',
-            overflow: 'auto',
-            fontFamily: '"JetBrains Mono", monospace'
-          }}>
-            {archives.find(a => a.id === selectedId)?.code || '无'}
+          <pre className="text-xs text-slate-400 overflow-auto max-h-24 leading-relaxed">
+            <code>{selectedArchive.code}</code>
           </pre>
         </div>
       )}
-
-      <style>{`
-        .btn-icon {
-          background: rgba(255, 255, 255, 0.1);
-          border: none;
-          border-radius: 6px;
-          padding: 6px;
-          cursor: pointer;
-          color: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background 0.2s;
-        }
-        .btn-icon:hover {
-          background: rgba(255, 255, 255, 0.2);
-        }
-        .archive-item.selected {
-          background: rgba(56, 239, 125, 0.15);
-          border: 1px solid rgba(56, 239, 125, 0.3);
-        }
-      `}</style>
     </div>
   )
 }

@@ -5,19 +5,22 @@ for generating and optimizing code variants.
 
 Environment Variables:
     MINIMAX_API_KEY: API key for MiniMax API authentication.
+    MINIMAX_MODEL: Optional model id. Defaults to MiniMax-M2.7-highspeed.
+    MINIMAX_API_ENDPOINT: Optional OpenAI-compatible chat endpoint.
 
 """
 
 import logging
 import os
+import re
 from typing import List, Optional
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
-API_ENDPOINT = "https://api.minimax.chat/v1/text/chatcompletion_v2"
-DEFAULT_MODEL = "MiniMax-M2"
+API_ENDPOINT = "https://api.minimax.io/v1/chat/completions"
+DEFAULT_MODEL = "MiniMax-M2.7-highspeed"
 MAX_RETRIES = 3
 RETRY_DELAY = 1.0
 
@@ -61,9 +64,21 @@ def _get_api_key() -> str:
     return api_key
 
 
+def _get_model(model: Optional[str] = None) -> str:
+    """Resolve the MiniMax model id from an explicit value or environment."""
+    selected_model = model or os.environ.get("MINIMAX_MODEL") or DEFAULT_MODEL
+    return selected_model.strip()
+
+
+def _get_endpoint() -> str:
+    """Resolve the MiniMax API endpoint from environment or default."""
+    endpoint = os.environ.get("MINIMAX_API_ENDPOINT") or API_ENDPOINT
+    return endpoint.strip()
+
+
 def _make_request(
     prompt: str,
-    model: str = DEFAULT_MODEL,
+    model: Optional[str] = None,
     temperature: float = 0.8,
     max_tokens: Optional[int] = None,
 ) -> dict:
@@ -84,6 +99,7 @@ def _make_request(
         MiniMaxError: For other API-related errors.
     """
     api_key = _get_api_key()
+    resolved_model = _get_model(model)
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -91,7 +107,7 @@ def _make_request(
     }
 
     payload = {
-        "model": model,
+        "model": resolved_model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature,
     }
@@ -102,7 +118,7 @@ def _make_request(
     with httpx.Client(timeout=120.0) as client:
         for attempt in range(MAX_RETRIES):
             try:
-                response = client.post(API_ENDPOINT, json=payload, headers=headers)
+                response = client.post(_get_endpoint(), json=payload, headers=headers)
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPStatusError as e:
@@ -134,7 +150,14 @@ def _make_request(
                 raise MiniMaxError(f"Request failed after {MAX_RETRIES} attempts: {e}")
 
 
-def generate_code_variants(prompt: str, num_variants: int = 5) -> List[str]:
+def generate_code_variants(
+    prompt: str,
+    num_variants: int = 5,
+    *,
+    model: Optional[str] = None,
+    temperature: float = 0.9,
+    max_tokens: Optional[int] = 4000,
+) -> List[str]:
     """Generate multiple code variants based on a prompt.
 
     This function uses the MiniMax API to generate several different
@@ -145,6 +168,9 @@ def generate_code_variants(prompt: str, num_variants: int = 5) -> List[str]:
             requirements and constraints.
         num_variants: The number of different variants to generate.
             Defaults to 5.
+        model: Optional MiniMax model id. Reads MINIMAX_MODEL when omitted.
+        temperature: Sampling temperature for generation.
+        max_tokens: Maximum tokens to generate.
 
     Returns:
         A list of code variant strings.
@@ -175,8 +201,9 @@ def generate_code_variants(prompt: str, num_variants: int = 5) -> List[str]:
 
     response = _make_request(
         prompt=generation_prompt,
-        temperature=0.9,
-        max_tokens=4000,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
 
     try:
@@ -185,7 +212,8 @@ def generate_code_variants(prompt: str, num_variants: int = 5) -> List[str]:
         raise MiniMaxError(f"Unexpected API response format: {e}")
 
     variants = content.split("---VARIANT---")
-    variants = [v.strip() for v in variants if v.strip()]
+    variants = [_clean_generated_code(v) for v in variants if v.strip()]
+    variants = [v for v in variants if v.strip()]
 
     if len(variants) < num_variants:
         logger.warning(
@@ -194,6 +222,38 @@ def generate_code_variants(prompt: str, num_variants: int = 5) -> List[str]:
         )
 
     return variants[:num_variants]
+
+
+def generate_text(
+    prompt: str,
+    *,
+    model: Optional[str] = None,
+    temperature: float = 0.7,
+    max_tokens: Optional[int] = 2048,
+) -> str:
+    """Generate one direct code proposal without the variant-wrapper prompt."""
+    direct_prompt = (
+        f"{prompt}\n\n"
+        "Return only one proposal in this exact format:\n"
+        "set:<complete Python program>\n\n"
+        "Do not include reasoning, markdown fences, explanations, or separators."
+    )
+    response = _make_request(
+        prompt=direct_prompt,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+
+    try:
+        content = response["choices"][0]["message"]["content"]
+    except (KeyError, IndexError) as e:
+        raise MiniMaxError(f"Unexpected API response format: {e}")
+
+    cleaned = _clean_generated_code(content)
+    if content.strip().startswith("set:") and not cleaned.startswith("set:"):
+        return f"set:{cleaned}"
+    return cleaned
 
 
 def optimize_code(code: str, problem: str) -> str:
@@ -237,6 +297,7 @@ def optimize_code(code: str, problem: str) -> str:
 
     response = _make_request(
         prompt=optimization_prompt,
+        model=_get_model(),
         temperature=0.7,
         max_tokens=4000,
     )
@@ -246,4 +307,36 @@ def optimize_code(code: str, problem: str) -> str:
     except (KeyError, IndexError) as e:
         raise MiniMaxError(f"Unexpected API response format: {e}")
 
-    return optimized_code.strip()
+    return _clean_generated_code(optimized_code)
+
+
+def _clean_generated_code(text: str) -> str:
+    """Strip provider thinking markup and markdown fences from generated code."""
+    without_thinking = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    if without_thinking.startswith("<think>"):
+        set_index = without_thinking.find("set:")
+        fence_index = without_thinking.find("```")
+        code_index = _find_python_code_start(without_thinking)
+        indexes = [index for index in (set_index, fence_index, code_index) if index >= 0]
+        if indexes:
+            without_thinking = without_thinking[min(indexes):].strip()
+    fenced = re.search(r"```(?:python)?\s*(.*?)```", without_thinking, re.DOTALL)
+    if fenced:
+        return fenced.group(1).strip()
+    set_index = without_thinking.find("set:")
+    if set_index >= 0:
+        return without_thinking[set_index:].strip()
+    code_index = _find_python_code_start(without_thinking)
+    if code_index >= 0:
+        return without_thinking[code_index:].strip()
+    return without_thinking.strip()
+
+
+def _find_python_code_start(text: str) -> int:
+    code_start = re.search(
+        r"(?m)^(?:from\s+\S+\s+import\s+|import\s+\S+|@\w+|def\s+|class\s+)",
+        text,
+    )
+    if code_start:
+        return code_start.start()
+    return -1

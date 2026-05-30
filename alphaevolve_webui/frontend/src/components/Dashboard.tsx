@@ -18,7 +18,7 @@ interface DashboardProps {
   isRunning: boolean
 }
 
-// 仪表盘主体组件 - 响应式布局，玻璃态卡片样式
+// 仪表盘主体组件 - 响应式布局，现代卡片设计
 function Dashboard({ isRunning }: DashboardProps) {
   // 本地状态管理 - 模拟数据
   const [status, setStatus] = useState<EvolutionStatus>({
@@ -63,25 +63,26 @@ function Dashboard({ isRunning }: DashboardProps) {
   }, [isRunning])
 
   return (
-    <div className="dashboard">
+    <div className="space-y-6">
       {/* 统计卡片行 */}
-      <div className="dashboard-top">
-        <StatsCards status={status} />
-      </div>
+      <StatsCards status={status} />
 
-      {/* 演进曲线图表 */}
-      <div className="chart-container glass-card">
-        <EvolutionChart />
-      </div>
+      {/* 主内容区 - 网格布局 */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {/* 演进曲线图表 - 全宽 */}
+        <div className="xl:col-span-2 glass-card p-6 animate-fade-in">
+          <EvolutionChart />
+        </div>
 
-      {/* 代码对比面板 */}
-      <div className="glass-card code-panel">
-        <CodeCompare />
-      </div>
+        {/* 代码对比面板 */}
+        <div className="glass-card p-6 animate-fade-in" style={{ animationDelay: '100ms' }}>
+          <CodeCompare />
+        </div>
 
-      {/* 历史存档列表 */}
-      <div className="glass-card">
-        <ArchiveList />
+        {/* 历史存档列表 */}
+        <div className="glass-card p-6 animate-fade-in" style={{ animationDelay: '200ms' }}>
+          <ArchiveList />
+        </div>
       </div>
     </div>
   )

@@ -1,374 +1,227 @@
 # AlphaEvolve
 
-AlphaEvolve is an evolutionary coding agent for algorithm discovery, inspired by Google DeepMind's AlphaDev. It uses Large Language Models (LLMs) to iteratively improve algorithms through quality-diversity search.
+AlphaEvolve is an **algorithm discovery workbench** inspired by Google DeepMind's AlphaEvolve. It uses Large Language Models (LLMs) to iteratively improve algorithms for automatically evaluable tasks through an evolutionary search loop.
+
+> This implementation focuses on the canonical AlphaEvolve product loop: **task → prompt → propose → evaluate → archive**.
 
 ## Features
 
-- **Evolutionary Algorithm Framework**: Population-based search with selection, mutation, and elitism
-- **LLM-Guided Mutations**: Intelligent code modifications using Claude or other LLM providers
-- **MAP-Elites Archive**: Quality-diversity search maintaining diverse high-performing solutions
-- **Multi-Stage Evaluation Pipeline**: Progressive evaluation with early termination
-- **Test Case Generation**: Automatic test case generation with multiple difficulty levels
-- **Hydra Configuration**: Flexible YAML-based experiment configuration
-- **Experiment Logging**: Structured logging with automatic output management
-- **Checkpoint Management**: Save and resume evolution experiments
+- **AlphaEvolve Workbench**: The canonical task → prompt → propose → evaluate → archive loop
+- **20 Built-in Algorithm Tasks**: Classic algorithm problems (sorting, search, graphs, dynamic programming, etc.)
+- **LLM-Powered Proposers**: Uses MiniMax (or any compatible LLM) for intelligent code mutations
+- **Heuristic Fallback Proposer**: Deterministic proposer for testing without API keys
+- **Automatic Evaluation**: Built-in Python function evaluator with correctness and speed metrics
+- **Archive System**: Maintains best candidates across generations
+- **REST API**: FastAPI-based API for programmatic access
+- **Web UI**: React-based frontend for visual interaction
+
+## Architecture
+
+The product is structured around one clear center — the `AlphaEvolveWorkbench`:
+
+```
+TaskSpec + EvaluationCases
+        ↓
+AlphaEvolveWorkbench.start_task_run()
+        ↓
+┌─────────────────────────────────────────────────────────┐
+│  For each generation:                                    │
+│    1. PromptSampler builds context from task + archive   │
+│    2. Proposer (LLM or Heuristic) generates proposal      │
+│    3. Evaluator scores the candidate                    │
+│    4. Archive updated with best candidates               │
+└─────────────────────────────────────────────────────────┘
+        ↓
+RunSnapshot (history + archive + best program)
+```
 
 ## Installation
 
 ```bash
-pip install alphaevolve
+pip install -e .
 ```
 
-For full functionality including Hydra configuration:
+For development with additional dependencies:
 
 ```bash
-pip install alphaevolve[hydra]
+pip install -e ".[dev]"
 ```
 
 ## Quick Start
 
+### Python API
+
 ```python
-from alphaevolve import (
-    Evolution,
-    EvolutionConfig,
-    MutationEngine,
-    UnitTestEvaluator,
+from alphaevolve import AlphaEvolveWorkbench, get_builtin_task
+
+# Use heuristic proposer (no API key needed)
+workbench = AlphaEvolveWorkbench()
+
+# Or use MiniMax LLM proposer (requires MINIMAX_API_KEY)
+# from alphaevolve.product.proposers import create_minimax_proposer
+# workbench = AlphaEvolveWorkbench(proposer=create_minimax_proposer())
+
+# List available tasks
+from alphaevolve import list_builtin_tasks
+for task in list_builtin_tasks():
+    print(f"{task.task_id}: {task.title}")
+
+# Run evolution on a task
+run = workbench.start_run(
+    task_id="sort_numbers",
+    generations=8,
+    archive_size=8
 )
 
-# Seed code
-SEED_CODE = """
-def sort_list(items):
-    result = list(items)
-    n = len(result)
-    for i in range(n):
-        for j in range(i + 1, n):
-            if result[i] > result[j]:
-                result[i], result[j] = result[j], result[i]
-    return result
-"""
+# Get the best program
+best_program = workbench.export_best_program(run.run_id)
+print(best_program)
+```
 
-# Configure evolution
-config = EvolutionConfig(
-    population_size=10,
-    max_generations=5,
-    elitism_count=2,
-    mutation_rate=0.7,
-)
+### REST API
 
-# Create evaluator
-evaluator = UnitTestEvaluator(
-    test_cases=[
-        (([3, 1, 2],), [1, 2, 3]),
-        (([5, 4, 3, 2, 1],), [1, 2, 3, 4, 5]),
-    ],
-    function_name="sort_list",
-)
+```bash
+# Start the API server
+cd alphaevolve_webui/backend
+uvicorn main:app --reload
+
+# List tasks
+curl http://localhost:8000/api/tasks
 
 # Run evolution
-evolution = Evolution(
-    config=config,
-    mutation_engine=MutationEngine(),
-    evaluator=evaluator,
-    seed_code=SEED_CODE,
-)
+curl -X POST http://localhost:8000/api/runs \
+  -H "Content-Type: application/json" \
+  -d '{"task_id": "sort_numbers", "generations": 4, "archive_size": 4}'
 
-best = evolution.evolve()
-print(f"Best fitness: {best.fitness}")
-print(f"Best code: {best.code}")
+# Export best program
+curl http://localhost:8000/api/runs/{run_id}/export
 ```
+
+### Web UI
+
+```bash
+cd alphaevolve_webui/frontend
+npm install
+npm run dev
+```
+
+Then open http://localhost:3000 in your browser.
 
 ## Project Structure
 
 ```
 alphaevolve/
-├── core/                      # Core evolutionary components
-│   ├── data_structures.py     # Individual, Population, Config classes
-│   ├── evolution.py           # Evolution engine
-│   ├── mutation.py            # Mutation engine with LLM integration
-│   └── evaluator.py           # Base evaluator and implementations
-├── llm/                       # LLM integration
-│   ├── config.py              # LLMConfig dataclass
-│   ├── client.py              # BaseLLMClient abstract class
-│   ├── ensemble.py            # LLMEnsemble for multi-model routing
-│   └── providers/
-│       └── anthropic.py       # Anthropic Claude client
-├── evolution/                 # Advanced evolution features
-│   ├── archive.py             # MAP-Elites ProgramArchive
-│   └── features.py            # Feature dimensions for archive
-├── evaluation/                # Evaluation pipeline
-│   ├── pipeline.py            # Multi-stage evaluation pipeline
-│   ├── stages.py              # Evaluation stage implementations
-│   └── test_generation/
-│       └── generator_module.py # Test case generator
-├── config/                    # Configuration system
-│   ├── config.py              # Dataclass configurations
-│   └── experiment.yaml        # Default experiment config
-├── utils/                     # Utilities
-│   ├── logger.py              # ExperimentLogger
-│   └── checkpoint.py          # CheckpointManager
-├── tests/                     # Test suite
-│   ├── test_alphaevolve.py    # Core tests
-│   ├── test_comprehensive.py  # Comprehensive tests
-│   └── test_config_and_utils.py # Config and utils tests
-└── examples/                  # Example scripts
-    └── sorting_demo.py        # Sorting algorithm evolution demo
+├── __init__.py          # Public API exports
+├── product/             # AlphaEvolve Workbench (CORE PRODUCT)
+│   ├── workbench.py     # AlphaEvolveWorkbench - main product controller
+│   ├── models.py        # TaskSpec, CandidateRecord, RunSnapshot
+│   ├── evaluation.py    # PythonFunctionEvaluator
+│   ├── proposers.py    # ProductProposer, HeuristicProductProposer
+│   └── tasks.py         # 20 built-in algorithm tasks
+├── llm/                 # LLM integration
+│   └── minimax_client.py # MiniMax API client
+├── sandbox/             # Safe code execution
+│   ├── executor.py      # SandboxExecutor
+│   ├── metrics.py       # Performance metrics
+│   └── verifier.py      # Contract verification
+├── problems/            # Problem interface definitions
+│   ├── problem.py       # Problem Protocol
+│   └── evaluators.py    # Evaluator implementations
+└── benchmarks/          # Benchmark suites
+    └── problem_suite.py  # MST/Steiner problem suite
+
+alphaevolve_webui/
+├── backend/             # FastAPI backend
+│   ├── main.py         # App factory
+│   └── product_api.py   # Product REST endpoints
+└── frontend/            # React + Vite frontend
+    └── src/
+        ├── components/  # UI components
+        └── api/         # API client
+
+tests/                   # Test suite
 ```
 
-## Core Components
+## Built-in Tasks
 
-### Evolution Engine
-
-The `Evolution` class manages the evolutionary search process:
-
-```python
-evolution = Evolution(
-    config=EvolutionConfig(population_size=10, max_generations=5),
-    mutation_engine=MutationEngine(),
-    evaluator=UnitTestEvaluator(test_cases, function_name="func"),
-    seed_code="def func(x): return x",
-)
-best = evolution.evolve()
-```
-
-### LLM Ensemble
-
-Use multiple LLM providers with intelligent routing:
-
-```python
-from alphaevolve import LLMEnsemble, AnthropicClient, LLMConfig, RoutingStrategy
-
-ensemble = LLMEnsemble(routing_strategy=RoutingStrategy.PRIORITY_BASED)
-ensemble.register_client("claude", AnthropicClient(LLMConfig(
-    provider="anthropic",
-    model="claude-3-5-sonnet-20241022",
-)))
-```
-
-### MAP-Elites Archive
-
-Maintain a diverse archive of high-performing solutions:
-
-```python
-from alphaevolve import ProgramArchive, ArchiveConfig, CodeComplexityFeature
-
-archive = ProgramArchive(ArchiveConfig(
-    feature_dimensions=[CodeComplexityFeature(n_bins=10)],
-    bins_per_dimension=10,
-))
-```
-
-### Evaluation Pipeline
-
-Multi-stage evaluation with early termination:
-
-```python
-from alphaevolve import EvaluationPipeline, SyntaxCheckStage, BasicTestStage
-
-pipeline = EvaluationPipeline(stages=[
-    SyntaxCheckStage(),
-    BasicTestStage(test_cases, function_name="func"),
-], early_terminate=True)
-```
-
-### Test Case Generator
-
-Generate test cases at multiple difficulty levels:
-
-```python
-from alphaevolve import TestCaseGenerator, Difficulty
-
-generator = TestCaseGenerator(seed=42)
-basic_tests = generator.generate("func(a, b)", Difficulty.BASIC, count=5)
-edge_tests = generator.generate("func(a, b)", Difficulty.EDGE, count=5)
-```
-
-## Configuration
-
-### Programmatic Configuration
-
-```python
-from alphaevolve import AlphaEvolveConfig
-
-config = AlphaEvolveConfig(
-    experiment={"name": "my_experiment", "seed": 42},
-    evolution={"population_size": 20, "max_generations": 10},
-    mutation={"use_llm": True, "temperature": 0.7},
-)
-```
-
-### YAML Configuration (requires Hydra)
-
-```yaml
-# config/experiment.yaml
-experiment:
-  name: "sorting_evolution"
-  seed: 42
-
-evolution:
-  population_size: 10
-  max_generations: 5
-  elitism_count: 2
-
-mutation:
-  use_llm: true
-  llm_provider: "anthropic"
-  temperature: 0.7
-```
-
-```python
-from alphaevolve import load_config
-
-config = load_config(config_path="config/experiment.yaml")
-```
-
-## Experiment Logging
-
-```python
-from alphaevolve import create_logger, ExperimentLogger
-
-logger = create_logger(
-    experiment_name="sorting_evolution",
-    config=config,
-)
-
-# Log evolution progress
-logger.log_evolution_step(
-    generation=5,
-    best_fitness=85.0,
-    avg_fitness=72.0,
-)
-
-# Save checkpoint
-logger.log_checkpoint(
-    best_code=best.code,
-    best_fitness=best.fitness,
-    generation=5,
-)
-
-# Log final results
-logger.log_final_results(
-    best_code=best.code,
-    best_fitness=best.fitness,
-    total_generations=5,
-    history=history,
-)
-```
-
-## Checkpoint Management
-
-```python
-from alphaevolve import CheckpointManager
-
-manager = CheckpointManager(
-    checkpoint_dir="outputs/checkpoints",
-    save_interval=2,
-    max_checkpoints=3,
-)
-
-# Save checkpoint
-manager.save(
-    generation=5,
-    best_code=best.code,
-    best_fitness=best.fitness,
-    population=population,
-)
-
-# Load checkpoint
-checkpoint = manager.load()
-if checkpoint:
-    print(f"Resuming from generation {checkpoint.generation}")
-```
-
-## Running Examples
-
-```bash
-# Run sorting evolution demo
-python -m alphaevolve.examples.sorting_demo
-
-# Run with LLM (requires ANTHROPIC_API_KEY)
-python -m alphaevolve.examples.sorting_demo --use-llm
-
-# Run MAP-Elites archive demo
-python -m alphaevolve.examples.sorting_demo --demo-archive
-
-# Run evaluation pipeline demo
-python -m alphaevolve.examples.sorting_demo --demo-pipeline
-```
-
-## Running Tests
-
-```bash
-# Run all tests
-python -m pytest alphaevolve/tests/ -v
-
-# Run specific test file
-python -m pytest alphaevolve/tests/test_comprehensive.py -v
-
-# Run with coverage
-python -m pytest alphaevolve/tests/ --cov=alphaevolve
-```
-
-## Test Results
-
-All **54 tests** pass successfully:
-
-- **13 tests**: Core functionality (`test_alphaevolve.py`)
-- **21 tests**: Comprehensive tests (`test_comprehensive.py`)
-- **14 tests**: Configuration and utilities (`test_config_and_utils.py`)
+| Task ID | Title | Category |
+|---------|-------|----------|
+| `sort_numbers` | Sort Numbers | Sorting |
+| `find_first_index` | Find First Index | Search |
+| `binary_search` | Binary Search | Search |
+| `two_sum_indices` | Two Sum Indices | Hashing |
+| `valid_parentheses` | Valid Parentheses | Stack |
+| `fibonacci` | Fibonacci | DP |
+| `gcd` | Greatest Common Divisor | Math |
+| `is_prime` | Prime Check | Math |
+| `sieve_primes` | Sieve of Eratosthenes | Math |
+| `factorial` | Factorial | Math |
+| `reverse_string` | Reverse String | Strings |
+| `palindrome_check` | Palindrome Check | Strings |
+| `merge_intervals` | Merge Intervals | Intervals |
+| `max_subarray_sum` | Maximum Subarray Sum | DP |
+| `longest_common_subsequence` | Longest Common Subsequence | DP |
+| `edit_distance` | Edit Distance | DP |
+| `knapsack_01` | 0/1 Knapsack | DP |
+| `bfs_order` | Breadth-First Search | Graphs |
+| `dijkstra_shortest_path` | Dijkstra Shortest Paths | Graphs |
+| `matrix_multiply` | Matrix Multiplication | Matrix |
 
 ## API Reference
 
 ### Core Classes
 
-| Class | Module | Description |
-|-------|--------|-------------|
-| `Evolution` | `alphaevolve.core.evolution` | Main evolution engine |
-| `EvolutionConfig` | `alphaevolve.core.data_structures` | Evolution hyperparameters |
-| `Individual` | `alphaevolve.core.data_structures` | Single program candidate |
-| `Population` | `alphaevolve.core.data_structures` | Population management |
-| `MutationEngine` | `alphaevolve.core.mutation` | Code mutation engine |
-| `UnitTestEvaluator` | `alphaevolve.core.evaluator` | Unit test evaluation |
+| Class | Description |
+|-------|-------------|
+| `AlphaEvolveWorkbench` | Main product controller for the evolution loop |
+| `TaskSpec` | Task specification with objective, initial program, and evaluation cases |
+| `EvaluationCase` | A single test case (input args, expected output) |
+| `PythonFunctionEvaluator` | Evaluator that runs Python functions against test cases |
+| `RunSnapshot` | Complete run state including history and archive |
+| `CandidateRecord` | A single candidate with program, evaluation, and lineage |
 
-### LLM Integration
+### Proposers
 
-| Class | Module | Description |
-|-------|--------|-------------|
-| `LLMConfig` | `alphaevolve.llm.config` | LLM configuration |
-| `BaseLLMClient` | `alphaevolve.llm.client` | Abstract LLM client |
-| `LLMEnsemble` | `alphaevolve.llm.ensemble` | Multi-model ensemble |
-| `AnthropicClient` | `alphaevolve.llm.providers.anthropic` | Claude API client |
+| Class | Description |
+|-------|-------------|
+| `HeuristicProductProposer` | Deterministic fallback (no API key needed) |
+| `MiniMaxProductProposer` | LLM-powered proposer using MiniMax API |
 
-### Archive (MAP-Elites)
+## Configuration
 
-| Class | Module | Description |
-|-------|--------|-------------|
-| `ProgramArchive` | `alphaevolve.evolution.archive` | MAP-Elites archive |
-| `ArchiveConfig` | `alphaevolve.evolution.archive` | Archive configuration |
-| `CodeComplexityFeature` | `alphaevolve.evolution.features` | Cyclomatic complexity |
-| `CodeSizeFeature` | `alphaevolve.evolution.features` | Lines of code feature |
+### Environment Variables
 
-### Evaluation
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MINIMAX_API_KEY` | MiniMax API key for LLM proposer | Required for LLM mode |
+| `MINIMAX_MODEL` | MiniMax model name | `MiniMax-M2.7-highspeed` |
+| `ALPHAEVOLVE_CORS_ORIGINS` | CORS allowed origins | `http://localhost:3000` |
 
-| Class | Module | Description |
-|-------|--------|-------------|
-| `EvaluationPipeline` | `alphaevolve.evaluation.pipeline` | Multi-stage pipeline |
-| `SyntaxCheckStage` | `alphaevolve.evaluation.stages` | Syntax validation |
-| `BasicTestStage` | `alphaevolve.evaluation.stages` | Basic unit tests |
-| `EdgeCaseStage` | `alphaevolve.evaluation.stages` | Edge case testing |
-| `TestCaseGenerator` | `alphaevolve.evaluation.test_generation` | Test case generation |
+## Running Tests
 
-### Configuration & Utilities
+```bash
+# Run all tests
+python -m pytest tests/ -v
 
-| Class | Module | Description |
-|-------|--------|-------------|
-| `AlphaEvolveConfig` | `alphaevolve.config` | Root configuration |
-| `ExperimentLogger` | `alphaevolve.utils` | Experiment logging |
-| `CheckpointManager` | `alphaevolve.utils` | Checkpoint management |
+# Run with coverage
+python -m pytest tests/ --cov=alphaevolve
+
+# Run specific test file
+python -m pytest tests/test_alphaevolve_product.py -v
+```
+
+## Documentation
+
+- [Product Gap Report](docs/alphaevolve_product_gap_report.md) - Analysis of differences from Google DeepMind AlphaEvolve
+- [Architecture Document](docs/alphadev_architecture.md) - System architecture details
+- [Alignment Report](docs/alphaevolve_alignment.md) - Implementation alignment status
 
 ## License
 
 MIT License
 
-## Author
+## Acknowledgments
 
-AlphaEvolve Team
+Inspired by Google DeepMind's AlphaEvolve research. See:
+- [AlphaEvolve Blog Post](https://deepmind.google/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/)
+- [AlphaEvolve Paper](https://storage.googleapis.com/deepmind-media/DeepMind.com/Blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/AlphaEvolve.pdf)

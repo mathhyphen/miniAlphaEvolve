@@ -1,74 +1,65 @@
-"""AlphaEvolve Redesign - Evolutionary algorithm framework with LLM agents.
+"""
+AlphaEvolve - Google DeepMind's AlphaEvolve-style Algorithm Discovery Workbench
 
-This package provides the Population-Wide Archive (PWA) system for
-evolutionary algorithm discovery. Key differences from standard MAP-Elites:
+This package provides an evolutionary coding agent that uses Large Language Models (LLMs)
+to iteratively improve algorithms for automatically evaluable tasks.
 
-- Fitness = latency improvement (not correctness score)
-- Diversity = algorithmic approaches (not feature dimensions)
-- Stores code snapshots at different performance levels
-- Enables discovering novel algorithms
+Core Product API:
+    AlphaEvolveWorkbench - The canonical task -> prompt -> propose -> evaluate -> archive loop
+    TaskSpec - Task specification with evaluator cases
+    PythonFunctionEvaluator - Standard Python function evaluator
 
-Example:
-    >>> from alphaevolve.archive import PopulationWideArchive, PWArchiveConfig
-    >>> config = PWArchiveConfig(baseline_latency=100.0)
-    >>> archive = PopulationWideArchive(config)
-    >>> # Add a solution
-    >>> archive.add(code, latency=85.0, generation=1)
-    >>> # Query by strategy
-    >>> from alphaevolve.archive import AlgorithmicStrategy
-    >>> fermat_solutions = archive.get_by_strategy(AlgorithmicStrategy.FERMAT_BASED)
+Quick Start:
+    from alphaevolve import AlphaEvolveWorkbench, get_builtin_task
+
+    workbench = AlphaEvolveWorkbench()
+    task = get_builtin_task("sort_numbers")
+    run = workbench.start_task_run(task=task, generations=8, archive_size=8)
+    best_program = workbench.export_best_program(run.run_id)
+
+For more details, see:
+    - docs/alphaevolve_product_gap_report.md - Product gap analysis vs Google DeepMind AlphaEvolve
+    - docs/alphadev_architecture.md - System architecture documentation
 """
 
-__version__ = "0.1.0"
-__author__ = "alphaevolve-redesign Team"
-
-from alphaevolve.archive import (
-    # Core PWA
-    PopulationWideArchive,
-    PWArchiveConfig,
-    PWAStats,
-    PWARetrieval,
-    CodeSnapshot,
-    PerformanceTier,
-    StrategyCell,
-    LatencyImprovement,
-    AlgorithmicStrategy,
-    StrategyDetector,
-    LatencyCalculator,
-    # Steiner extensions
-    SteinerPWA,
-    SteinerImprovement,
-    SteinerLatencyCalculator,
-    SteinerStrategyDetector,
-    SteinerPWARetrieval,
-    create_steiner_pwa,
-    STEINER_STRATEGIES,
+from alphaevolve.product import (
+    AlphaEvolveWorkbench,
+    CandidateRecord,
+    CaseFailure,
+    EvaluationCase,
+    EvaluationReport,
+    Proposal,
+    PythonFunctionEvaluator,
+    RunSnapshot,
+    TaskSpec,
+    apply_proposal,
+    get_builtin_task,
+    list_builtin_tasks,
 )
 
+from alphaevolve.sandbox import SandboxExecutor, ExecutionConfig, Contract
+from alphaevolve.problems import Problem, FunctionEvaluator, BenchmarkEvaluator
+
 __all__ = [
-    # Version
-    "__version__",
-    "__author__",
-
-    # Core PWA
-    "PopulationWideArchive",
-    "PWArchiveConfig",
-    "PWAStats",
-    "PWARetrieval",
-    "CodeSnapshot",
-    "PerformanceTier",
-    "StrategyCell",
-    "LatencyImprovement",
-    "AlgorithmicStrategy",
-    "StrategyDetector",
-    "LatencyCalculator",
-
-    # Steiner extensions
-    "SteinerPWA",
-    "SteinerImprovement",
-    "SteinerLatencyCalculator",
-    "SteinerStrategyDetector",
-    "SteinerPWARetrieval",
-    "create_steiner_pwa",
-    "STEINER_STRATEGIES",
+    # Product API (AlphaEvolve core loop)
+    "AlphaEvolveWorkbench",
+    "CandidateRecord",
+    "CaseFailure",
+    "EvaluationCase",
+    "EvaluationReport",
+    "Proposal",
+    "PythonFunctionEvaluator",
+    "RunSnapshot",
+    "TaskSpec",
+    "apply_proposal",
+    "get_builtin_task",
+    "list_builtin_tasks",
+    # Sandbox
+    "SandboxExecutor",
+    "ExecutionConfig",
+    "Contract",
+    # Problems
+    "Problem",
+    "FunctionEvaluator",
+    "BenchmarkEvaluator",
 ]

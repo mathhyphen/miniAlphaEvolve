@@ -1,0 +1,7 @@
+interface:
+  display_name: "Claude Code Implementation Workflow"
+  short_description: "Implement approved research plans, code changes, and tests"
+  default_prompt: "Use this workflow after Codex has produced an experiment plan or implementation handoff. Focus on code implementation, integration, testing, and verification."
+
+policy:
+  allow_implicit_invocation: true

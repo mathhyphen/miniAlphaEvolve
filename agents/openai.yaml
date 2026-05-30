@@ -1,0 +1,7 @@
+interface:
+  display_name: "Unix Research Workflow (Codex Research Lead)"
+  short_description: "Use Codex for research planning, validation design, and reports in this repository"
+  default_prompt: "Use $unix-research-workflow as the research lead for this repository. Codex should own experiment planning, validation criteria, report writing, and implementation handoff. When code changes are needed, prepare a bounded handoff for Claude Code and its project subagents in .claude/agents/."
+
+policy:
+  allow_implicit_invocation: true

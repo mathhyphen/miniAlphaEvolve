@@ -1,0 +1,74 @@
+experiment: <name>
+branch: expl/<name>
+objective: |
+  Describe what you want to achieve (min 20 chars).
+hypothesis: |
+  Describe what you expect to happen (min 20 chars).
+collaboration:
+  research_agent: codex
+  implementation_agent: claude_code
+  handoff_artifacts:
+    - findings/experiment_plan.md
+    - findings/research_report.md
+    - findings/implementation_handoff.md
+dataset:
+  name: paired-brain-mri-ct
+  split: patient-level train-val-test
+  pairing: paired
+task:
+  type: mri_to_ct_synthesis
+  source_modality: t1_mri
+  target_modality: ct
+model:
+  family: flow_matching
+  backbone: 3d-unet
+preprocessing:
+  spacing_mm: [1.0, 1.0, 1.0]
+  intensity_normalization: zscore
+reproducibility:
+  seed: 42
+  data_version: v1
+  config_path: configs/mri_to_ct_flow_matching.yaml
+research_plan:
+  question: |
+    State the core scientific question Codex should help answer.
+  motivation: |
+    Explain what decision this experiment should unlock.
+  planned_approach: |
+    Describe the baseline, proposed method, and key ablations.
+  ablations:
+    - baseline
+    - one focused variant
+success_criteria:
+  metrics:
+    - name: val_mae
+      threshold: 75.0
+      direction: lower_is_better
+      aggregation: best
+    - name: val_ssim
+      threshold: 0.90
+      direction: higher_is_better
+      aggregation: best
+validation_plan:
+  checks:
+    - Verify the dataset split and preprocessing assumptions before training.
+    - Confirm logged metric names match the success_criteria entries or aliases.
+    - Compare against the strongest baseline before claiming improvement.
+  artifacts:
+    - findings/validation_checklist.md
+implementation_handoff:
+  owner: claude_code
+  summary: |
+    Claude Code should implement the approved training, config, logging,
+    and test changes after the research plan is reviewed.
+  code_scope:
+    - training loop updates
+    - config wiring
+    - logging and tests
+  deliverables:
+    - code changes tied to the approved plan
+    - updated configs or scripts
+    - verification notes or tests
+constraints:
+  max_runtime_hours: 48
+  gpu: 1xA100-80GB
